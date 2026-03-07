@@ -38,6 +38,9 @@ class PipelineState(TypedDict):
     corroboration_hits: list[dict]
     weather_data: dict | None
     satellite_data: dict | None
+    satellite_eo_features: dict | None
+    satellite_quality: dict | None
+    satellite_alert: dict | None
     confidence_breakdown: dict | None
     confidence_scores: dict | None
     cluster_id: str | None

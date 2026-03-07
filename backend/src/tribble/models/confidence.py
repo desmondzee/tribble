@@ -39,6 +39,12 @@ SOURCE_PRIORS: dict[str, float] = {
 }
 
 
+def compute_access_difficulty(weather_risk: float, satellite_corroboration: float) -> float:
+    weather = min(max(weather_risk, 0.0), 1.0)
+    satellite = min(max(satellite_corroboration, 0.0), 1.0)
+    return round(min(max((0.5 * weather) + (0.5 * satellite), 0.0), 1.0), 4)
+
+
 class ConfidenceScore(BaseModel):
     report_id: str
     publishability: float = Field(ge=0, le=1)

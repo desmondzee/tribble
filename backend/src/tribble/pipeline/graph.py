@@ -4,7 +4,9 @@ from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from tribble.models.confidence import compute_access_difficulty
 from tribble.pipeline.state import PipelineState, PipelineStatus
+from tribble.services.satellite_fusion import fuse_satellite_weather_report_signals
 
 logger = logging.getLogger(__name__)
 
@@ -107,18 +109,49 @@ def enrich_weather(state: PipelineState) -> dict:
 
 @_safe_node
 def enrich_satellite(state: PipelineState) -> dict:
+    eo_features = state.get("satellite_eo_features") or {}
+    quality = state.get("satellite_quality") or {}
+    flood_score = float(eo_features.get("flood_score", 0.0))
+    change_score = float(eo_features.get("change_score", 0.0))
+    quality_score = float(quality.get("quality_score", 0.0))
+
+    reason_codes = []
+    if quality_score < 0.5:
+        reason_codes.append("low_scene_quality")
+    if flood_score > 0.6:
+        reason_codes.append("flood_signal_detected")
+    if not reason_codes:
+        reason_codes.append("limited_satellite_signal")
+
+    satellite_data = {
+        "flood_score": round(max(0.0, min(flood_score, 1.0)), 4),
+        "change_score": round(max(0.0, min(change_score, 1.0)), 4),
+        "quality_score": round(max(0.0, min(quality_score, 1.0)), 4),
+        "reason_codes": reason_codes,
+    }
     return {
         "status": PipelineStatus.SATELLITE_ENRICHED,
         "node_trace": state["node_trace"] + ["enrich_satellite"],
+        "satellite_data": satellite_data,
     }
 
 
 @_safe_node
 def score(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["score"]
+    fusion = fuse_satellite_weather_report_signals(
+        satellite=state.get("satellite_data"),
+        weather=state.get("weather_data"),
+        reports={"cross_source_corroboration": 0.5},
+    )
+    satellite_corroboration = float(fusion["alert_score"])
+    weather_risk = float((state.get("weather_data") or {}).get("flood_risk", 0.3))
+    access_difficulty = compute_access_difficulty(weather_risk, satellite_corroboration)
+
     return {
         "status": PipelineStatus.SCORED,
         "node_trace": trace,
+        "satellite_alert": fusion,
         "confidence_breakdown": {
             "source_prior": 0.5,
             "spam_score": 0.05,
@@ -128,12 +161,12 @@ def score(state: PipelineState) -> dict:
             "temporal_consistency": 0.5,
             "cross_source_corroboration": 0.0,
             "weather_plausibility": 0.5,
-            "satellite_corroboration": 0.0,
+            "satellite_corroboration": satellite_corroboration,
         },
         "confidence_scores": {
             "publishability": 0.5,
             "urgency": 0.5,
-            "access_difficulty": 0.3,
+            "access_difficulty": access_difficulty,
         },
     }
 
