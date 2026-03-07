@@ -10,3 +10,4 @@ def test_stage2_flags_default_to_safe_values(monkeypatch):
     assert s.enable_openclaw is False
     assert s.enable_flock is False
     assert s.enable_satellite_ml is False
+    assert s.enable_satellite_ai_analysis is False

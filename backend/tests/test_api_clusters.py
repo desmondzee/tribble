@@ -161,3 +161,51 @@ def test_omits_clusters_with_missing_centroid_no_default_zero(monkeypatch):
     assert len(payload["features"]) == 1
     assert payload["features"][0]["geometry"]["coordinates"] == [32.0, 16.0]
     assert [0, 0] not in [f["geometry"]["coordinates"] for f in payload["features"]]
+
+
+def test_refresh_clusters_returns_200_and_calls_rpc(monkeypatch):
+    """POST /api/clusters/refresh calls refresh_incident_clusters RPC and returns clusters_updated."""
+    captured = {}
+    monkeypatch.setattr(
+        "tribble.api.clusters.get_supabase",
+        lambda: _FakeDB([{"clusters_updated": 7}], captured),
+    )
+    monkeypatch.setattr(
+        "tribble.api.clusters.get_settings",
+        lambda: type("Settings", (), {"cluster_radius_km": 5.0, "cluster_time_window_hours": 72})(),
+    )
+
+    response = client.post("/api/clusters/refresh")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["clusters_updated"] == 7
+    assert captured["fn_name"] == "refresh_incident_clusters"
+    assert captured["params"]["p_radius_km"] == 5.0
+    assert captured["params"]["p_time_window_hours"] == 72
+
+
+def test_refresh_clusters_accepts_query_params(monkeypatch):
+    """POST /api/clusters/refresh forwards radius_km and time_window_hours to RPC."""
+    captured = {}
+    monkeypatch.setattr(
+        "tribble.api.clusters.get_supabase",
+        lambda: _FakeDB([{"clusters_updated": 0}], captured),
+    )
+
+    response = client.post(
+        "/api/clusters/refresh?radius_km=10.0&time_window_hours=48"
+    )
+    assert response.status_code == 200
+    assert response.json()["clusters_updated"] == 0
+    assert captured["params"]["p_radius_km"] == 10.0
+    assert captured["params"]["p_time_window_hours"] == 48
+
+
+def test_refresh_clusters_503_when_db_unavailable(monkeypatch):
+    """POST /api/clusters/refresh returns 503 when Supabase is not configured."""
+    def raise_runtime():
+        raise RuntimeError("no db")
+    monkeypatch.setattr("tribble.api.clusters.get_supabase", raise_runtime)
+
+    response = client.post("/api/clusters/refresh")
+    assert response.status_code == 503

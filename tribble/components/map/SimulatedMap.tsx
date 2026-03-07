@@ -10,7 +10,6 @@ import { IncidentTooltip } from "@/components/map/IncidentTooltip";
 import { fetchGeolocationGeoJSON } from "@/lib/geolocation-api";
 import {
   PLACEHOLDER_EVENTS,
-  PLACEHOLDER_DRONES,
   PLACEHOLDER_ZONES,
   PLACEHOLDER_BOUNDARIES,
   PLACEHOLDER_NGOS,
@@ -92,25 +91,6 @@ function buildEventsGeoJSON(): GeoJSON.FeatureCollection {
         layerGroup: ONTOLOGY_TO_LAYER[e.ontology_class] || "C1",
       },
       geometry: { type: "Point" as const, coordinates: [e.lng, e.lat] },
-    })),
-  };
-}
-
-function buildDronesGeoJSON(): GeoJSON.FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: PLACEHOLDER_DRONES.map((d) => ({
-      type: "Feature" as const,
-      properties: {
-        id: d.id,
-        status: d.status,
-        heading: d.position.heading_deg,
-        battery: d.battery_pct,
-      },
-      geometry: {
-        type: "Point" as const,
-        coordinates: [d.position.lng, d.position.lat],
-      },
     })),
   };
 }
@@ -238,7 +218,6 @@ export const SimulatedMap = () => {
 
     map.on("load", () => {
       map.addSource("events", { type: "geojson", data: buildEventsGeoJSON() });
-      map.addSource("drones", { type: "geojson", data: buildDronesGeoJSON() });
       map.addSource("zones", { type: "geojson", data: buildZonesGeoJSON() });
       map.addSource(
         "boundaries",
@@ -622,64 +601,6 @@ export const SimulatedMap = () => {
         minzoom: 6,
       });
 
-      map.addLayer({
-        id: "drones-circles",
-        type: "circle",
-        source: "drones",
-        paint: {
-          "circle-color": [
-            "match",
-            ["get", "status"],
-            "active",
-            "#00D4FF",
-            "standby",
-            "#636366",
-            "low_battery",
-            "#FF6B35",
-            "lost_signal",
-            "#FF2D55",
-            "#636366",
-          ],
-          "circle-radius": 6,
-          "circle-stroke-width": 2,
-          "circle-stroke-color": [
-            "match",
-            ["get", "status"],
-            "active",
-            "#00D4FF",
-            "standby",
-            "#636366",
-            "low_battery",
-            "#FF6B35",
-            "lost_signal",
-            "#FF2D55",
-            "#636366",
-          ],
-          "circle-stroke-opacity": 0.5,
-        },
-        minzoom: 3,
-      });
-
-      map.addLayer({
-        id: "drones-labels",
-        type: "symbol",
-        source: "drones",
-        layout: {
-          "text-field": ["get", "id"],
-          "text-size": 9,
-          "text-font": ["Open Sans Regular"],
-          "text-offset": [1.5, 0],
-          "text-anchor": "left",
-        },
-        paint: {
-          "text-color": "#00D4FF",
-          "text-opacity": 0.8,
-          "text-halo-color": "#0A0E1A",
-          "text-halo-width": 1,
-        },
-        minzoom: 4,
-      });
-
       map.on("click", "events-circles", (e) => {
         const feature = e.features?.[0];
         if (feature?.properties?.id) {
@@ -789,8 +710,6 @@ export const SimulatedMap = () => {
         "C5_natural_environmental",
       ],
       "events-labels": ["C1_armed_conflict"],
-      "drones-circles": ["E1_drones"],
-      "drones-labels": ["E1_drones"],
       "ngo-zones-outline": ["B1_humanitarian_ops"],
       "ngo-zones-labels": ["B1_humanitarian_ops"],
       "routes-line": ["E2_supply_routes"],

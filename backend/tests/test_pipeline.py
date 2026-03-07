@@ -34,6 +34,8 @@ def _state(**kw) -> PipelineState:
         "satellite_eo_features": None,
         "satellite_quality": None,
         "satellite_alert": None,
+        "satellite_scene": None,
+        "satellite_ai": None,
         "confidence_breakdown": None,
         "confidence_scores": None,
         "cluster_id": None,

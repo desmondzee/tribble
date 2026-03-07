@@ -328,8 +328,13 @@ def fetch_satellite(state: PipelineState) -> dict:
         except (ValueError, TypeError):
             pass
     from tribble.ingest.satellite import fetch_satellite_for_pipeline
-    eo_features, quality = fetch_satellite_for_pipeline(lat=lat, lon=lon, date_str=date_str)
-    return {"node_trace": trace, "satellite_eo_features": eo_features, "satellite_quality": quality}
+    eo_features, quality, scene = fetch_satellite_for_pipeline(lat=lat, lon=lon, date_str=date_str)
+    return {
+        "node_trace": trace,
+        "satellite_eo_features": eo_features,
+        "satellite_quality": quality,
+        "satellite_scene": scene,
+    }
 
 
 @_safe_node
@@ -340,11 +345,32 @@ def enrich_satellite(state: PipelineState) -> dict:
     change_score = float(eo_features.get("change_score", 0.0))
     quality_score = float(quality.get("quality_score", 0.0))
 
+    # Optional AI analysis when flag on and we have a scene with tile_url
+    satellite_ai_dict: dict | None = None
+    settings = get_settings()
+    scene = state.get("satellite_scene")
+    if settings.enable_satellite_ai_analysis and scene and (scene.get("tile_url") or "").strip():
+        try:
+            from tribble.db import get_supabase
+            from tribble.services.satellite_vision import get_or_create_ai_analysis
+
+            sb = get_supabase()
+            analysis = get_or_create_ai_analysis(sb, scene.get("scene_id", ""), scene)
+            satellite_ai_dict = analysis.to_dict_for_fusion()
+            flood_score = max(flood_score, analysis.flood_score_ai)
+            change_score = max(change_score, analysis.infrastructure_damage_score_ai)
+        except Exception as exc:
+            logger.debug("Satellite AI analysis skipped: %s", exc)
+
     reason_codes = []
     if quality_score < 0.5:
         reason_codes.append("low_scene_quality")
     if flood_score > 0.6:
         reason_codes.append("flood_signal_detected")
+    if satellite_ai_dict and float(satellite_ai_dict.get("flood_score_ai", 0)) > 0.5:
+        reason_codes.append("ai_flood_signal")
+    if satellite_ai_dict and float(satellite_ai_dict.get("infrastructure_damage_score_ai", 0)) > 0.5:
+        reason_codes.append("ai_infrastructure_concern")
     if not reason_codes:
         reason_codes.append("limited_satellite_signal")
 
@@ -354,10 +380,15 @@ def enrich_satellite(state: PipelineState) -> dict:
         "quality_score": round(max(0.0, min(quality_score, 1.0)), 4),
         "reason_codes": reason_codes,
     }
+    if satellite_ai_dict:
+        satellite_data["flood_score_ai"] = satellite_ai_dict.get("flood_score_ai", 0.0)
+        satellite_data["infrastructure_damage_score_ai"] = satellite_ai_dict.get("infrastructure_damage_score_ai", 0.0)
+
     return {
         "status": PipelineStatus.SATELLITE_ENRICHED,
         "node_trace": state["node_trace"] + ["enrich_satellite"],
         "satellite_data": satellite_data,
+        "satellite_ai": satellite_ai_dict,
     }
 
 

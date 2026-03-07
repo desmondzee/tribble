@@ -49,7 +49,7 @@ The pipeline is defined in `backend/src/tribble/pipeline/graph.py` and compiled 
 |-----------------------|-------------|--------|
 | (none)                | —           | `GET /health` |
 | `/api/reports`        | reports     | Create reports, trigger pipeline jobs. |
-| `/api/clusters`       | clusters    | Cluster/GeoJSON for map. |
+| `/api/clusters`       | clusters    | Cluster/GeoJSON for map; **POST /refresh** to recompute clusters. |
 | `/api/geolocation`    | geolocation | Run geolocation pipeline on reports. |
 | `/api/assistant`      | assistant   | Assistant/briefing. |
 | `/api/realtime`       | realtime    | Realtime subscriptions. |
@@ -57,7 +57,21 @@ The pipeline is defined in `backend/src/tribble/pipeline/graph.py` and compiled 
 | `/api/streaming`      | streaming   | `GET /stats`, `GET /health`, reseed. |
 | `/api/worker`         | worker      | `POST /start`, `POST /stop`, `GET /status`. |
 | `/api/analysis`       | analysis    | Situation report, satellite analysis. |
+| **`/api/routes`**      | routes      | **Safe route suggestion** (maps agent): `GET/POST /suggest` — recency-aware routing away from recent events. |
 | **`/api/pipeline`**   | pipeline    | **Blueprint and queue** (see below). |
+
+---
+
+## Clustering (location-based)
+
+Incident clusters are **computed from report locations** in Supabase: `reports` with a non-null `location_id` are joined to `locations` (PostGIS `geom`). Clustering uses PostGIS **ST_ClusterDBSCAN** so cluster count and shape follow where incidents actually are.
+
+- **Source:** `reports` → `locations` (only reports that have a location). Optional aggregation of `confidence_scores` (urgency → weighted_severity, publishability → weighted_confidence) and `reports.crisis_categories` → `top_need_categories`.
+- **Config (env / `.env`):**
+  - `TRIBBLE_CLUSTER_RADIUS_KM` — max distance (km) for points in the same cluster (default `5.0`).
+  - `TRIBBLE_CLUSTER_TIME_WINDOW_HOURS` — only cluster reports from the last N hours (default `72`). Used when calling refresh with default params.
+- **Refresh:** **`POST /api/clusters/refresh`** — calls Supabase RPC `refresh_incident_clusters`, truncates and repopulates `incident_clusters`, returns `{"clusters_updated": N}`. Optional query params: `radius_km`, `time_window_hours` (override config defaults). Use for on-demand or cron so the map layer reflects current incident locations.
+- **Read:** `GET /api/clusters` (and optional bbox/min_severity/country_iso) — returns GeoJSON from `get_incident_clusters_geojson` (reads `incident_clusters`). No change to this API.
 
 ---
 

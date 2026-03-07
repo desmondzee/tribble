@@ -41,6 +41,8 @@ class PipelineState(TypedDict):
     satellite_eo_features: dict | None
     satellite_quality: dict | None
     satellite_alert: dict | None
+    satellite_scene: dict | None
+    satellite_ai: dict | None
     confidence_breakdown: dict | None
     confidence_scores: dict | None
     cluster_id: str | None

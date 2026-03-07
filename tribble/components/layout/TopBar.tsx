@@ -30,7 +30,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/app/map": "INTELLIGENCE MAP",
   "/app/events": "EVENT BROWSER",
   "/app/intelligence": "INTELLIGENCE DASHBOARD",
-  "/app/drones": "DRONE FLEET",
   "/app/reports": "REPORTS",
   "/app/submissions": "SUBMISSION QUEUE",
   "/app/settings": "SETTINGS",

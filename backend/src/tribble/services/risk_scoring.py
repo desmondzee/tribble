@@ -34,6 +34,7 @@ def compute_zone_risk_profile(
     weather: dict,
     satellite: dict,
     baseline_vegetation: str,
+    satellite_ai: dict | None = None,
 ) -> dict[str, float]:
     """Compute composite risk profile for a cluster zone."""
     total_reports = max(sum(report_type_counts.values()), 1)
@@ -71,12 +72,15 @@ def compute_zone_risk_profile(
     ndwi_flood = max(0.0, ndwi) * 2  # positive NDWI = water presence
     flood_risk = min((0.6 * flood_risk_wx) + (0.4 * min(ndwi_flood, 1.0)), 1.0)
 
-    # Infrastructure damage: reports + ACLED shelling + satellite change
+    # Infrastructure damage: reports + ACLED shelling + satellite change + optional AI
     infra_reports = report_type_counts.get("infrastructure_damage", 0) / total_reports
     shelling_events = sum(1 for e in acled_events if e.get("ontology_class") == "shelling")
     shelling_signal = min(shelling_events / 2.0, 1.0)
     change = float(satellite.get("change_score", 0.0))
     infrastructure_damage = min((0.4 * infra_reports * 3) + (0.4 * shelling_signal) + (0.2 * change), 1.0)
+    if satellite_ai:
+        infra_ai = float(satellite_ai.get("infrastructure_damage_score_ai", 0.0))
+        infrastructure_damage = min(infrastructure_damage + 0.2 * infra_ai, 1.0)
 
     # Access difficulty: route disruption + conflict
     route_disruption = float(weather.get("route_disruption_risk", 0.0))

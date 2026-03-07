@@ -70,12 +70,11 @@
   animation: ring-expand 2.4s ease-out infinite;
 }
 
+/* Only high-severity clusters pulse; orange pulse is reserved for newest-event markers */
 .cluster-map-marker.high .cluster-map-ring {
   animation-duration: 2s;
 }
-.cluster-map-marker.medium .cluster-map-ring {
-  animation-duration: 1.1s;
-}
+.cluster-map-marker.medium .cluster-map-ring,
 .cluster-map-marker.low .cluster-map-ring {
   animation: none;
   opacity: 0.18;
@@ -89,41 +88,30 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  position: relative;
 }
 .event-map-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 2;
 }
 .event-map-marker:hover .event-map-dot {
   transform: scale(1.3);
 }
-
-/* ─── Drone Map Markers ─────────────────────────────────────────────── */
-.drone-map-marker {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.drone-map-marker .drone-map-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
-}
-.drone-map-marker .drone-map-ring {
+.event-map-ring {
   position: absolute;
-  inset: 0;
+  inset: -4px;
   border-radius: 50%;
   border: 1px solid;
-  opacity: 0.15;
+  opacity: 0;
+  animation: ring-expand 2.4s ease-out infinite;
+  pointer-events: none;
+}
+.event-map-marker.newest .event-map-ring {
+  animation-duration: 1.1s;
 }
 
 /* ─── Map HUD Overlay ──────────────────────────────────────────────── */
@@ -139,8 +127,8 @@
 }
 
 .map-hud-panel {
-  background: rgba(11, 17, 33, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: hsl(var(--card) / 0.92);
+  border: 1px solid hsl(var(--border));
   backdrop-filter: blur(8px);
   padding: 10px 14px;
   border-radius: 2px;
@@ -187,6 +175,36 @@
   min-width: 180px;
 }
 
+/* Right stack: Legend on top, Layers below; same panel style and text size */
+.map-right-stack {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 130px;
+}
+
+.map-legend-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 130px;
+}
+
+.map-legend-row {
+  display: flex;
+  align-items: center;
+}
+
+.map-legend-item {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
 .map-layer-btn.active .map-layer-dot.satellites {
   background: #94a3b8;
   box-shadow: 0 0 6px #94a3b8;
@@ -200,13 +218,23 @@
 }
 
 .map-layer-controls {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   min-width: 130px;
+}
+
+.map-layer-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.map-layer-controls-bar .map-layer-header {
+  margin-bottom: 0;
 }
 
 .map-layer-header {
@@ -279,10 +307,6 @@
   background: #f97316;
   box-shadow: 0 0 6px #f97316;
 }
-.map-layer-btn.active .map-layer-dot.drones {
-  background: #00ff99;
-  box-shadow: 0 0 6px #00ff99;
-}
 .map-layer-btn.active .map-layer-dot.ngoZones {
   background: #00d4ff;
   box-shadow: 0 0 6px #00d4ff;
@@ -305,11 +329,11 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   line-height: 1.8;
-  background: rgba(11, 17, 33, 0.6);
+  background: hsl(var(--card) / 0.85);
   padding: 8px 12px;
   border-radius: 2px;
   backdrop-filter: blur(4px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid hsl(var(--border));
 }
 
 .map-hud-meta .highlight {

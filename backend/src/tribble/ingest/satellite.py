@@ -66,6 +66,30 @@ def _tile_url_from_stac_links(links: list[dict]) -> str | None:
 PC_DATA_PREVIEW_BASE = "https://planetarycomputer.microsoft.com/api/data/v1/item/preview.png"
 
 
+def bbox_preview_url(
+    collection_id: str,
+    item_id: str,
+    bbox: list[float],
+    width_height: tuple[int, int] | None = None,
+) -> str:
+    """Build a preview URL for a bbox crop. PC Data API supports bbox; falls back to full preview if not."""
+    from urllib.parse import urlencode
+
+    params = {
+        "collection": collection_id,
+        "item": item_id,
+        "assets": "visual",
+        "asset_bidx": "visual|1,2,3",
+        "nodata": "0",
+        "format": "png",
+    }
+    if bbox and len(bbox) == 4:
+        params["bbox"] = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+    if width_height:
+        params["width"], params["height"] = width_height
+    return f"{PC_DATA_PREVIEW_BASE}?{urlencode(params)}"
+
+
 def viewable_preview_url(collection_id: str, item_id: str) -> str:
     """Build a URL that returns a PNG image normal people can open in a browser."""
     from urllib.parse import urlencode
@@ -162,11 +186,11 @@ def fetch_satellite_for_pipeline(
     lat: float,
     lon: float,
     date_str: str | None = None,
-) -> tuple[dict, dict]:
-    """Sync helper for pipeline: fetch satellite eo_features and quality for report location.
+) -> tuple[dict, dict, dict | None]:
+    """Sync helper for pipeline: fetch satellite eo_features, quality, and optional scene for AI.
 
-    Returns (satellite_eo_features, satellite_quality) for enrich_satellite. Uses STAC
-    to find one scene near date_str; on error or no scene returns ({}, {}).
+    Returns (satellite_eo_features, satellite_quality, scene_or_none). scene_or_none has
+    scene_id, tile_url, bbox, acquisition_date for vision analysis when enabled.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -185,9 +209,9 @@ def fetch_satellite_for_pipeline(
             search_sentinel2_scenes(lat, lon, start, end, max_cloud_cover=50)
         )
     except Exception:
-        return ({}, {})
+        return ({}, {}, None)
     if not scenes:
-        return ({}, {})
+        return ({}, {}, None)
     scene = scenes[0]
     cloud_pct = float(scene.get("cloud_cover_pct") or 0)
     red = random.uniform(0.05, 0.20)
@@ -200,4 +224,10 @@ def fetch_satellite_for_pipeline(
     flood_score = max(0.0, min(ndwi * 1.5, 1.0)) if ndwi > 0 else 0.0
     eo_features = {"flood_score": round(flood_score, 4), "change_score": 0.0}
     quality = {"quality_score": quality_score}
-    return (eo_features, quality)
+    scene_for_ai = {
+        "scene_id": scene.get("scene_id", ""),
+        "tile_url": scene.get("tile_url") or "",
+        "bbox": scene.get("bbox") or [],
+        "acquisition_date": scene.get("acquisition_date") or date_str,
+    }
+    return (eo_features, quality, scene_for_ai)

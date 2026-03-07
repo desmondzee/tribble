@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
 from tribble.config import get_settings
 from tribble.db import get_supabase
@@ -15,6 +16,8 @@ from tribble.services.risk_scoring import (
     compute_zone_risk_profile,
     build_viewer_url,
 )
+from tribble.services.satellite_vision import get_or_create_ai_analysis_async
+from tribble.services.event_satellite import run_event_satellite_analysis
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
@@ -242,6 +245,14 @@ async def get_dashboard():
             if d < min_dist:
                 min_dist, closest_scene = d, s
 
+        # Optional AI analysis for this zone's scene (cached per scene_id)
+        ai_analysis = None
+        if closest_scene:
+            scene_id = closest_scene.get("scene_id") or str(closest_scene.get("id", ""))
+            if scene_id:
+                ai_analysis = await get_or_create_ai_analysis_async(sb, scene_id, closest_scene)
+        satellite_ai_dict = ai_analysis.to_dict_for_fusion() if ai_analysis else None
+
         # Find closest weather
         closest_wx = _closest_weather(
             cluster.get("last_updated", ""),
@@ -261,12 +272,13 @@ async def get_dashboard():
             weather=closest_wx,
             satellite=sat_data,
             baseline_vegetation=baseline_veg,
+            satellite_ai=satellite_ai_dict,
         )
         risk_level = _risk_level_from_profile(risk_profile)
         top_risks = sorted(risk_profile, key=risk_profile.get, reverse=True)[:2]
 
-        # Satellite context with viewer URL
-        satellite_context = {"scenes": [], "change_detection": None, "baseline_vegetation": baseline_veg, "viewer_url": None}
+        # Satellite context with viewer URL and optional AI analysis
+        satellite_context = {"scenes": [], "change_detection": None, "baseline_vegetation": baseline_veg, "viewer_url": None, "ai_analysis": None}
         if closest_scene:
             satellite_context["scenes"] = [{
                 "acquisition_date": closest_scene.get("acquisition_date"),
@@ -280,6 +292,9 @@ async def get_dashboard():
             bbox = closest_scene.get("bbox")
             if bbox and isinstance(bbox, list) and len(bbox) == 4:
                 satellite_context["viewer_url"] = build_viewer_url(bbox, closest_scene.get("acquisition_date", ""))
+
+            if satellite_ai_dict:
+                satellite_context["ai_analysis"] = satellite_ai_dict
 
             # Change detection if multiple scenes
             if len(scenes) >= 2:
@@ -307,6 +322,9 @@ async def get_dashboard():
             "satellite_confirmed": [k for k in ["infrastructure_damage", "flood_risk", "water_scarcity"] if risk_profile.get(k, 0) > 0.5 and closest_scene],
             "weather_confirmed": [k for k in ["flood_risk", "water_scarcity"] if risk_profile.get(k, 0) > 0.5 and closest_wx],
         }
+        if satellite_ai_dict and float(satellite_ai_dict.get("infrastructure_damage_score_ai", 0)) > 0.5 and closest_scene:
+            if "infrastructure_damage" not in corroboration["satellite_confirmed"]:
+                corroboration["satellite_confirmed"] = list(corroboration["satellite_confirmed"]) + ["infrastructure_damage"]
 
         zones.append({
             "cluster_id": cluster.get("id"),
@@ -409,3 +427,179 @@ Be specific about risk types and actionable. No hedging."""
         "corridors": corridors,
         "narrative_summary": narrative_summary,
     }
+
+
+# ---------------------------------------------------------------------------
+# Event-driven satellite analysis
+# ---------------------------------------------------------------------------
+
+
+class EventSatelliteBody(BaseModel):
+    event_ids: list[str] | None = None
+    limit: int = 10
+    persist: bool = True
+    events_with_coords: list[dict] | None = None
+
+
+@router.post("/event-satellite")
+async def run_event_satellite(body: EventSatelliteBody | None = None):
+    """Run event-driven satellite analysis: parse event (context-driven), multi-time snapshots, aid-impact synthesis.
+
+    Body: { "event_ids": ["uuid1", "uuid2"] } to analyse events from the events table; or
+    "events_with_coords": [ { "id", "lat", "lng", "narrative" or "description", "timestamp" or "event_timestamp", ... } ]
+    to run for feed items (e.g. news) without fetching from DB. Returns per-event: parsed_event,
+    snapshots (period_label, acquisition_date, image_url, satellite_analysis), aid_impact.
+    Organisations can use snapshots to see infrastructure across different time periods.
+    """
+    try:
+        sb = get_supabase()
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    opts = body or EventSatelliteBody()
+    event_ids = opts.event_ids
+    limit = opts.limit
+    persist = opts.persist
+    events_with_coords = opts.events_with_coords
+
+    events: list[dict] = []
+    if events_with_coords:
+        for e in events_with_coords[:20]:
+            if not isinstance(e, dict):
+                continue
+            lat, lng = e.get("lat"), e.get("lng")
+            if lat is None or lng is None:
+                continue
+            events.append({
+                "id": e.get("id") or e.get("event_id"),
+                "event_id": e.get("event_id") or e.get("id"),
+                "lat": float(lat),
+                "lng": float(lng),
+                "description": e.get("description") or e.get("narrative") or "",
+                "narrative": e.get("narrative") or e.get("description") or "",
+                "timestamp": e.get("timestamp") or e.get("event_timestamp"),
+                "event_timestamp": e.get("event_timestamp") or e.get("timestamp"),
+                "ontology_class": e.get("ontology_class"),
+                "processing_metadata": e.get("processing_metadata"),
+            })
+    elif event_ids:
+        for eid in event_ids[:20]:
+            resp = sb.table("events").select("*").eq("id", eid).execute()
+            if resp.data and len(resp.data) > 0:
+                events.append(resp.data[0])
+    else:
+        resp = (
+            sb.table("events")
+            .select("*")
+            .not_.is_("lat", "null")
+            .not_.is_("lng", "null")
+            .order("timestamp", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        events = resp.data or []
+
+    if not events:
+        raise HTTPException(
+            status_code=404,
+            detail="No events with coordinates found. Provide event_ids or ensure events table has lat/lng.",
+        )
+
+    results = []
+    for event in events:
+        try:
+            out = await run_event_satellite_analysis(sb, event)
+            results.append(out)
+            if persist and out.get("event_id"):
+                aid = out.get("aid_impact") or {}
+                sb.table("analysis_results").insert({
+                    "analysis_type": "event_satellite_aid_impact",
+                    "summary": aid.get("summary", ""),
+                    "details": {
+                        "event_id": out.get("event_id"),
+                        "parsed_event": out.get("parsed_event"),
+                        "snapshots": out.get("snapshots"),
+                        "synthesis": aid,
+                    },
+                    "provider": "gemini",
+                    "model": None,
+                    "events_analyzed": 1,
+                    "reports_analyzed": 0,
+                }).execute()
+        except Exception as exc:
+            logger.warning("Event satellite analysis failed for event %s: %s", event.get("id"), exc)
+            results.append({
+                "event_id": str(event.get("id")) if event.get("id") else None,
+                "error": str(exc),
+                "parsed_event": None,
+                "snapshots": [],
+                "aid_impact": None,
+            })
+
+    return {"results": results}
+
+
+@router.get("/event-satellite")
+async def get_event_satellite_results(
+    event_ids: str | None = Query(None, description="Comma-separated event or report IDs to fetch satellite analysis for"),
+    limit: int = Query(50, ge=1, le=200, description="Max number of stored results to return when event_ids not provided"),
+):
+    """Return stored event-driven satellite analysis from Supabase for the feed, Inspect, and Helios.
+
+    Use event_ids to get results for specific events (e.g. feed item ids): all snapshots and photos
+    across time intervals are in each result's snapshots array. Use in a satellite analysis bar
+    per event to show image_url, acquisition_date, period_label for before/at_event/after.
+    Only events with coordinates have satellite analysis; do not draw a 5km footprint for
+    cluster markers that have no events inside their radius.
+    """
+    try:
+        sb = get_supabase()
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    ids_set: set[str] | None = None
+    if event_ids:
+        ids_set = {x.strip() for x in event_ids.split(",") if x.strip()}
+
+    try:
+        q = (
+            sb.table("analysis_results")
+            .select("id, summary, details, created_at")
+            .eq("analysis_type", "event_satellite_aid_impact")
+            .order("created_at", desc=True)
+            .limit(limit * 2 if ids_set else limit)
+        )
+        rows = q.execute().data or []
+    except Exception as exc:
+        logger.warning("Event satellite GET failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Database query failed")
+
+    results = []
+    seen_event_ids: set[str] = set()
+    for r in rows:
+        details = r.get("details") or {}
+        if not isinstance(details, dict):
+            continue
+        eid = details.get("event_id")
+        if eid is not None:
+            eid = str(eid)
+        if ids_set is not None and eid not in ids_set:
+            continue
+        if eid and eid in seen_event_ids:
+            continue
+        if eid:
+            seen_event_ids.add(eid)
+        results.append({
+            "event_id": eid,
+            "parsed_event": details.get("parsed_event"),
+            "snapshots": details.get("snapshots") or [],
+            "aid_impact": details.get("synthesis"),
+            "summary": r.get("summary"),
+            "created_at": r.get("created_at"),
+        })
+        if ids_set and len(results) >= len(ids_set):
+            break
+        if not ids_set and len(results) >= limit:
+            break
+
+    return {"results": results}

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import type { Map as MapboxMap, FillLayer, LineLayer } from "mapbox-gl";
 import Map, {
   Marker,
@@ -12,7 +14,6 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "@/styles/map.css";
 import ClusterMarker from "./ClusterMarker";
 import { EventMarker } from "./EventMarker";
-import { DroneMarker } from "./DroneMarker";
 import {
   buildCoverageGeoJSON,
   buildSeverityZoneGeoJSON,
@@ -72,10 +73,16 @@ const LAYER_META = [
   { key: "zones", label: "ZONES" },
   { key: "boundaries", label: "BOUNDARIES" },
   { key: "events", label: "EVENTS" },
-  { key: "drones", label: "DRONES" },
   { key: "ngoZones", label: "NGO ZONES" },
   { key: "routes", label: "ROUTES" },
   { key: "geolocation", label: "GEOLOCATION" },
+] as const;
+
+const LEGEND_SEVERITY_ITEMS = [
+  { label: "Critical", color: "hsl(var(--hip-critical))" },
+  { label: "High", color: "hsl(var(--hip-warn))" },
+  { label: "Medium", color: "hsl(var(--hip-medium))" },
+  { label: "Low", color: "hsl(var(--hip-low))" },
 ] as const;
 
 type LayerKey = (typeof LAYER_META)[number]["key"];
@@ -122,7 +129,7 @@ const BOUNDARIES_LINE_PAINT = {
 const DEFAULT_VIEW = { longitude: 30.5, latitude: 7.0, zoom: 5.5 };
 
 export default function LiveMap() {
-  const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents, newsEvents } = useData();
+  const { clusters, zones, boundaries, events, ngoZones, routes, geolocationEvents, newsEvents, newestEventIds } = useData();
   const {
     setSelectedEventId,
     setSelectedNewsEventId,
@@ -140,9 +147,8 @@ export default function LiveMap() {
     zones: true,
     boundaries: true,
     events: true,
-    drones: true,
     ngoZones: true,
-    routes: true,
+    routes: false,
     geolocation: true,
   });
   const [viewState, setViewState] = useState({
@@ -152,6 +158,8 @@ export default function LiveMap() {
   });
   const [mapMode, setMapMode] = useState<"satellite" | "3d">("satellite");
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [layersPanelOpen, setLayersPanelOpen] = useState(true);
+  const [legendOpen, setLegendOpen] = useState(false);
   const mapRef = useRef<MapboxMap | null>(null);
 
   const flatClusters = useMemo(
@@ -504,6 +512,7 @@ export default function LiveMap() {
             <Marker key={evt.id} longitude={evt.lng} latitude={evt.lat} anchor="center">
               <EventMarker
                 event={evt}
+                isNewest={newestEventIds.has(evt.id)}
                 onClick={() => {
                   setSelectedEventId(evt.id);
                   setRightPanelOpen(true);
@@ -512,18 +521,34 @@ export default function LiveMap() {
               />
             </Marker>
           ))}
-        {layers.drones &&
-          drones.map((d) => (
-            <Marker
-              key={d.id}
-              longitude={d.position.lng}
-              latitude={d.position.lat}
-              anchor="center"
-            >
-              <DroneMarker drone={d} />
-            </Marker>
-          ))}
-
+        {layers.events &&
+          newsEvents
+            .filter((evt) => evt.lat != null && evt.lng != null)
+            .map((evt) => (
+              <Marker
+                key={evt.id}
+                longitude={evt.lng!}
+                latitude={evt.lat!}
+                anchor="center"
+              >
+                <EventMarker
+                  event={{
+                    id: evt.id,
+                    severity: evt.severity,
+                    lat: evt.lat!,
+                    lng: evt.lng!,
+                    location_name: evt.headline,
+                  }}
+                  isNewest={newestEventIds.has(evt.id)}
+                  onClick={() => {
+                    setSelectedNewsEventId(evt.id);
+                    setSelectedEventId(null);
+                    setRightPanelOpen(true);
+                    setRightPanelTab("news_feed");
+                  }}
+                />
+              </Marker>
+            ))}
         {layers.clusters &&
           clusters.features.map((f) => {
             const [lng, lat] = f.geometry.coordinates;
@@ -550,25 +575,6 @@ export default function LiveMap() {
       </Map>
 
       <div className="map-hud-overlay">
-        <div className="map-hud-coords map-hud-panel">
-          <div className="map-hud-row">
-            <span className="map-hud-label">LAT</span>
-            <span className="map-hud-value">
-              {viewState.latitude.toFixed(4)}°
-            </span>
-          </div>
-          <div className="map-hud-row">
-            <span className="map-hud-label">LON</span>
-            <span className="map-hud-value">
-              {viewState.longitude.toFixed(4)}°
-            </span>
-          </div>
-          <div className="map-hud-row">
-            <span className="map-hud-label">ZOOM</span>
-            <span className="map-hud-value">{viewState.zoom.toFixed(1)}</span>
-          </div>
-        </div>
-
         <div className="map-mode-controls map-hud-panel">
           <div className="map-layer-header">MODE</div>
           <button
@@ -593,21 +599,112 @@ export default function LiveMap() {
           )}
         </div>
 
-        <div className="map-layer-controls map-hud-panel">
-          <div className="map-layer-header">LAYERS</div>
-          {LAYER_META.map(({ key, label }) => (
+        {/* Right stack: Legend on top, Layers below; same panel style and text size */}
+        <div className="map-right-stack">
+          <div className="map-legend-controls map-hud-panel">
             <button
-              key={key}
-              className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
-              onClick={() => toggleLayer(key)}
+              type="button"
+              className="map-layer-controls-bar flex items-center justify-between gap-2 w-full py-2 px-2 rounded-sm hover:bg-white/5 transition-colors"
+              onClick={() => setLegendOpen((o) => !o)}
+              aria-expanded={legendOpen}
+              aria-label={legendOpen ? "Minimize legend" : "Expand legend"}
             >
-              <span className={`map-layer-dot ${key}`} />
-              {label}
+              <span className="map-layer-header mb-0">LEGEND</span>
+              {legendOpen ? (
+                <ChevronUp className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              )}
             </button>
-          ))}
+            <AnimatePresence initial={false}>
+              {legendOpen && (
+                <motion.div
+                  className="flex flex-col gap-1.5 pt-2 pb-0"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <p className="map-layer-header mb-1">SEVERITY</p>
+                  <div className="space-y-1.5">
+                    {LEGEND_SEVERITY_ITEMS.map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center gap-2 map-legend-row"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-sm flex-shrink-0"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="map-legend-item">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+        <div className="map-layer-controls map-hud-panel">
+          <div className="flex flex-col-reverse gap-0 min-w-[130px]">
+            {/* Bar: always visible, click toggles dropdown */}
+            <button
+              type="button"
+              className="map-layer-controls-bar flex items-center justify-between gap-2 w-full py-2 px-2 rounded-sm hover:bg-white/5 transition-colors"
+              onClick={() => setLayersPanelOpen((o) => !o)}
+              aria-expanded={layersPanelOpen}
+              aria-label={layersPanelOpen ? "Minimize layers" : "Expand layers"}
+            >
+              <span className="map-layer-header mb-0">LAYERS</span>
+              {layersPanelOpen ? (
+                <ChevronUp className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              )}
+            </button>
+            <AnimatePresence initial={false}>
+              {layersPanelOpen && (
+                <motion.div
+                  className="flex flex-col gap-0.5 pt-1 pb-0"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {LAYER_META.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
+                      onClick={() => toggleLayer(key)}
+                    >
+                      <span className={`map-layer-dot ${key}`} />
+                      {label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
         </div>
 
         <div className="map-hud-meta">
+          <div className="map-hud-row">
+            <span className="map-hud-label">LAT</span>
+            <span className="map-hud-value">
+              {viewState.latitude.toFixed(4)}°
+            </span>
+          </div>
+          <div className="map-hud-row">
+            <span className="map-hud-label">LON</span>
+            <span className="map-hud-value">
+              {viewState.longitude.toFixed(4)}°
+            </span>
+          </div>
+          <div className="map-hud-row">
+            <span className="map-hud-label">ZOOM</span>
+            <span className="map-hud-value">{viewState.zoom.toFixed(1)}</span>
+          </div>
           <div>PROJ: MERCATOR</div>
           <div>DATUM: WGS84</div>
           <div className="highlight">

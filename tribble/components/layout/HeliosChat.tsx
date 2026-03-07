@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Bot, Send, Loader2, Sparkles } from "lucide-react";
 import { sendHeliosMessage } from "@/lib/api";
+import { useRoleStore } from "@/store/roleSlice";
 
 interface Message {
   role: "user" | "assistant";
@@ -86,6 +87,7 @@ export function HeliosChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { activeRole } = useRoleStore();
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -98,8 +100,11 @@ export function HeliosChat() {
     setInput("");
     setLoading(true);
 
+    const persona: "civilian" | "organization" =
+      activeRole === "civilian" ? "civilian" : "organization";
+
     try {
-      const reply = await sendHeliosMessage(text.trim());
+      const reply = await sendHeliosMessage(text.trim(), persona);
       setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
       setMessages((prev) => [
@@ -140,23 +145,23 @@ export function HeliosChat() {
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-2 space-y-3">
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Sparkles className="w-8 h-8 text-primary/30 mb-3" />
-            <p className="font-mono text-[10px] text-muted-foreground mb-1">
+          <div className="flex flex-col items-center justify-center py-10 text-center px-2">
+            <Sparkles className="w-8 h-8 text-primary/30 mb-4" />
+            <p className="font-mono text-[11px] text-foreground mb-1">
               Ask HELIOS about the current situation
             </p>
-            <p className="font-mono text-[8px] text-muted-foreground/60 mb-4">
+            <p className="font-mono text-[8px] text-muted-foreground/80 mb-5">
               Powered by live ACLED event data
             </p>
-            <div className="flex flex-col gap-1.5 w-full max-w-[260px]">
+            <div className="flex flex-col gap-2 w-full max-w-[260px]">
               {STARTERS.map((s) => (
                 <button
                   key={s}
                   type="button"
                   onClick={() => send(s)}
-                  className="text-left px-3 py-2 rounded-md border border-border bg-background hover:bg-muted/50 hover:border-primary/30 transition-colors"
+                  className="text-left pl-3 pr-3 py-2.5 rounded-sm border border-border bg-background hover:bg-muted/50 hover:border-primary/30 transition-colors border-l-2 border-l-primary/50 hover:border-l-primary"
                 >
-                  <span className="font-mono text-[10px] text-foreground/80">
+                  <span className="font-mono text-[10px] text-foreground">
                     {s}
                   </span>
                 </button>

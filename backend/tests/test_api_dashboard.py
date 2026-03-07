@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 from fastapi.testclient import TestClient
 from tribble.main import app
+from tribble.models.satellite_ai import SatelliteAIAnalysis
 from tribble.services.llm_provider import LLMResult
 
 client = TestClient(app)
@@ -75,9 +76,10 @@ def _mock_supabase():
     return sb
 
 
+@patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock, return_value=SatelliteAIAnalysis.no_signal())
 @patch("tribble.api.analysis.get_supabase")
 @patch("tribble.api.analysis.GeminiProvider")
-def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
+def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb, mock_ai_analysis):
     mock_get_sb.return_value = _mock_supabase()
 
     mock_gemini = MagicMock()
@@ -99,6 +101,30 @@ def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
     assert "risk_profile" in zone
     assert "satellite_context" in zone
     assert "viewer_url" in zone["satellite_context"]
+    assert "ai_analysis" in zone["satellite_context"]
+
+
+@patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock)
+@patch("tribble.api.analysis.get_supabase")
+@patch("tribble.api.analysis.GeminiProvider")
+def test_dashboard_satellite_confirmed_includes_infrastructure_damage_when_ai_high(mock_gemini_cls, mock_get_sb, mock_ai_analysis):
+    mock_get_sb.return_value = _mock_supabase()
+    mock_gemini_cls.return_value.generate = AsyncMock(
+        return_value=LLMResult(status="ok", text="Narrative", model="gemini", metadata={})
+    )
+    high_infra = SatelliteAIAnalysis(
+        flood_score_ai=0.2,
+        infrastructure_damage_score_ai=0.8,
+        labels=["possible_infrastructure_damage"],
+        model="gemini",
+    )
+    mock_ai_analysis.return_value = high_infra
+
+    response = client.get("/api/analysis/dashboard")
+    assert response.status_code == 200
+    zone = response.json()["zones"][0]
+    assert "infrastructure_damage" in zone["corroboration"]["satellite_confirmed"]
+    assert zone["satellite_context"]["ai_analysis"]["infrastructure_damage_score_ai"] == 0.8
 
 
 @patch("tribble.api.satellite.get_supabase")

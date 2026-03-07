@@ -21,6 +21,10 @@ def fuse_satellite_weather_report_signals(
 
     flood_score = float(sat.get("flood_score", 0.0))
     quality_score = float(sat.get("quality_score", 0.0))
+    flood_score_ai = float(sat.get("flood_score_ai", 0.0))
+    infra_ai = float(sat.get("infrastructure_damage_score_ai", 0.0))
+    # Blend AI scores with index-based: take max so AI can supplement
+    flood_score = max(flood_score, flood_score_ai)
     weather_risk = float(wx.get("flood_risk", 0.0))
     corroboration = float(rpt.get("cross_source_corroboration", 0.0))
 
@@ -34,6 +38,10 @@ def fuse_satellite_weather_report_signals(
         reason_codes.append("low_scene_quality")
     if flood_score > 0.6:
         reason_codes.append("satellite_flood_signal")
+    if flood_score_ai > 0.5:
+        reason_codes.append("ai_flood_signal")
+    if infra_ai > 0.5:
+        reason_codes.append("ai_infrastructure_concern")
     if weather_risk > 0.6:
         reason_codes.append("weather_flood_signal")
     if corroboration > 0.5:

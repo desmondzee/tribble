@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     enable_openclaw: bool = False
     enable_flock: bool = False
     enable_satellite_ml: bool = False
+    enable_satellite_ai_analysis: bool = False
     flock_api_base_url: str = "https://api.flock.io/v1"
     flock_api_key: str = Field(default="", repr=False)
     flock_model: str = "meta-llama/Llama-3.3-70B-Instruct"
@@ -27,6 +28,15 @@ class Settings(BaseSettings):
     satellite_change_window_days: int = 14
     satellite_ml_provider_url: str = ""
     satellite_ml_api_key: str = Field(default="", repr=False)
+    satellite_event_snapshot_km: float = 5.0
+    satellite_event_time_windows: list[dict] = Field(
+        default_factory=lambda: [
+            {"label": "before", "offset_days": -14},
+            {"label": "at_event", "offset_days": 0, "tolerance_days": 3},
+            {"label": "after", "offset_days": 7},
+        ],
+        description="Time windows for multi-period snapshots (days relative to event date)",
+    )
     pipeline_max_retries: int = 3
     cluster_radius_km: float = 5.0
     cluster_time_window_hours: int = 72

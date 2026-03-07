@@ -65,6 +65,8 @@ Brief overview of the analysis flows and the data they use.
 - Impact and infrastructure notes  
 - Correlation with civilian reports  
 
+**Optional AI-derived signals:** When `enable_satellite_ai_analysis` is enabled, a vision model (e.g. Gemini) can analyse satellite preview imagery per scene. Results are cached in `satellite_ai_results` (flood_score_ai, infrastructure_damage_score_ai, labels) and **supplement** index-based fusion and risk scoring. All AI outputs are area-level hypotheses for corroboration only; no building-level claims.
+
 **Stored in:** `analysis_results` (analysis_type: `satellite_analysis`).
 
 ---
@@ -77,6 +79,7 @@ Brief overview of the analysis flows and the data they use.
 | Civilian reports | `civilian_reports` | Seed script (synthetic), web submissions, future WhatsApp |
 | Weather | `weather_data` | Open-Meteo historical (ingest) |
 | Satellite imagery | `satellite_scenes` | Sentinel-2 STAC (e.g. Planetary Computer), indices (NDVI, NDWI) |
+| Satellite AI analysis | `satellite_ai_results` | Optional vision model per scene (cached); supplements fusion and risk |
 | Incoming reports for pipeline | `reports` | POST /api/reports, simulator, or other ingest |
 
 ---
@@ -88,3 +91,44 @@ Brief overview of the analysis flows and the data they use.
 - **Satellite analysis:** Analyses **satellite_scenes + weather + civilian_reports** → fusion + LLM → EO-based flood/impact and correlation with ground reports.
 
 All analysis outputs that are persisted go into **analysis_results** (situation_report, satellite_analysis) or into **verification_runs** / **confidence_scores** (per-report pipeline).
+
+---
+
+## 6. Maps agent and route suggestion
+
+**Endpoint:** `GET /api/routes/suggest` and `POST /api/routes/suggest`
+
+**What it does:** Suggests safe routes between an origin and destination by avoiding **recent** incidents. Used by the Safe Routes page and by HELIOS when the user asks for safe routes, alternative ways in, or how to avoid recent events.
+
+**What is analysed:**
+
+- **events** — filtered by `timestamp >= now() - avoid_recent_hours` (recency).
+- **incident_clusters** — filtered by `last_updated` for the same window; used as risk geometry along the path.
+
+**Process:**
+
+1. Filter events and clusters by recency (`avoid_recent_hours` query/body param).
+2. Compute **primary route** (direct A→B) risk using `compute_corridor_risk` with recency-filtered intervening events and clusters.
+3. If the direct route has high/critical risk and an event is near the segment, compute an **alternative** route via a detour waypoint away from the event.
+4. Optionally generate a short **narrative** (Gemini) summarising the suggestion.
+5. Return `recent_events_nearby`, `suggested_routes` (primary + optional alternative), and `narrative`.
+
+**Response shape:** `{ recent_events_nearby: [...], suggested_routes: [{ type, summary, waypoints_or_corridor, risk_level, advisory, distance_km }], narrative }`.
+
+**HELIOS integration:** When the user message matches routing keywords (e.g. "safe route", "alternative way in", "avoid the incident"), HELIOS calls the route-suggestion logic with default origin/destination and returns the formatted suggestion. For custom coordinates, the user uses the **Safe Routes** page (`/app/routes`).
+
+---
+
+## 7. Event-driven satellite analysis (per news event)
+
+**Endpoints:** `POST /api/analysis/event-satellite`, `GET /api/analysis/event-satellite`
+
+**What is analysed:** Individual **news/conflict events** with coordinates (from `events` table or from the feed, e.g. `/api/events/news`). For each event we run: context-driven event parsing (LLM) → 5km×5km satellite snapshots at multiple time windows (before / at_event / after) → vision analysis per snapshot → synthesis (does this event affect aid response?).
+
+**Storage:** Results are stored in **Supabase** in `analysis_results` with `analysis_type: 'event_satellite_aid_impact'`. Each row's `details` includes `event_id`, `parsed_event`, `snapshots` (array of `period_label`, `acquisition_date`, `image_url`, `scene_id`, `satellite_analysis`), and `synthesis`. This allows organisations to see **all photos of a location across time intervals** and to power a **satellite analysis bar** in the feed, Inspect, and Helios.
+
+**Feed / satellite analysis bar:**
+
+- **Run analysis for feed items:** Send `POST /api/analysis/event-satellite` with `events_with_coords: [ { id, lat, lng, narrative, timestamp, ... } ]` (e.g. one or more items from `GET /api/events/news` that have `lat`/`lng`). Results are stored and keyed by that `id`.
+- **Show stored results:** Call `GET /api/analysis/event-satellite?event_ids=id1,id2,...` with the feed item ids. Each result includes `snapshots` with `image_url`, `acquisition_date`, `period_label` for before/at_event/after — use these in a **satellite analysis bar** per event to show the location over time.
+- **Map behaviour:** Only events with coordinates get satellite analysis. Do **not** draw a 5km×5km circle or square for **cluster markers that have no events inside their radius**; only show the satellite footprint (or analysis) for actual event points that have analysis.

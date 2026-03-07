@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type RightPanelTab = "agent" | "news_feed" | "drone_ops" | "cluster_inspect";
+export type RightPanelTab = "agent" | "news_feed" | "cluster_inspect";
 
 interface UISlice {
   sidebarExpanded: boolean;

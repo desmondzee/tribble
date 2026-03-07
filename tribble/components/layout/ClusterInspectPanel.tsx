@@ -1,15 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   ShieldAlert,
   AlertTriangle,
   Construction,
   MapPin,
   Radio,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import { useUIStore } from "@/store/uiSlice";
 import { useData } from "@/context/DataContext";
+import { sendEventsSummaryMessage } from "@/lib/api";
+import type { NewsEvent } from "@/lib/api";
 
 const SEVERITY_LABEL: Record<string, { text: string; color: string }> = {
   high: { text: "HIGH THREAT", color: "text-red-400" },
@@ -38,6 +42,65 @@ function distanceKm(
 function flyTo(lat: number, lng: number) {
   window.dispatchEvent(
     new CustomEvent("hip:flyTo", { detail: { lng, lat, zoom: 9 } })
+  );
+}
+
+const DEFAULT_SUMMARY_PROMPT =
+  "Summarize these events in 2-3 sentences. Focus on main themes and any escalation risks.";
+
+function EventsSummaryBlock({ events }: { events: NewsEvent[] }) {
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const eventsKeyRef = useRef<string>("");
+
+  const eventsKey = events.map((e) => e.id).sort().join(",");
+
+  useEffect(() => {
+    if (events.length === 0) return;
+    if (eventsKeyRef.current === eventsKey) return;
+    eventsKeyRef.current = eventsKey;
+    setLoading(true);
+    setError(null);
+    setSummary(null);
+
+    sendEventsSummaryMessage(DEFAULT_SUMMARY_PROMPT, events)
+      .then((reply) => {
+        setSummary(reply);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Summary unavailable");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [eventsKey, events]);
+
+  return (
+    <div className="pt-2 border-t border-border">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <FileText className="w-3 h-3 text-primary" />
+        <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
+          SUMMARY
+        </p>
+      </div>
+      {loading && (
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+          <span className="font-mono text-[10px] text-muted-foreground">
+            Summarizing...
+          </span>
+        </div>
+      )}
+      {error && (
+        <p className="font-mono text-[10px] text-destructive/80">{error}</p>
+      )}
+      {!loading && summary && (
+        <p className="text-[11px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+          {summary}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -238,6 +301,11 @@ export function ClusterInspectPanel() {
           </div>
         )}
       </div>
+
+      {/* Auto-presented summary of nearby events */}
+      {nearbyEvents.length > 0 && (
+        <EventsSummaryBlock events={nearbyEvents} />
+      )}
     </div>
   );
 }

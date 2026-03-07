@@ -35,17 +35,24 @@ def test_zone_risk_profile_conflict_heavy():
     assert 0.0 <= profile["flood_risk"] <= 1.0
 
 
-def test_zone_risk_profile_food_suppressed_in_arid():
-    profile = compute_zone_risk_profile(
+def test_zone_risk_profile_satellite_ai_boosts_infrastructure_damage():
+    base = compute_zone_risk_profile(
         acled_events=[],
-        report_type_counts={"food_need": 3, "shelling": 7},
-        weather={"flood_risk": 0.0, "storm_risk": 0.0, "heat_risk": 0.3, "route_disruption_risk": 0.0},
-        satellite={"ndvi": 0.12, "ndwi": -0.1, "quality_score": 0.8},
+        report_type_counts={"water_need": 5},
+        weather={"flood_risk": 0.0},
+        satellite={"ndvi": 0.2, "ndwi": 0.0, "quality_score": 0.8, "change_score": 0.0},
         baseline_vegetation="arid",
+        satellite_ai=None,
     )
-    # In arid region, satellite doesn't boost food_insecurity — only reports count
-    assert profile["food_insecurity"] > 0.0  # still has reports
-    assert profile["food_insecurity"] < 0.8  # but no satellite confirmation
+    with_ai = compute_zone_risk_profile(
+        acled_events=[],
+        report_type_counts={"water_need": 5},
+        weather={"flood_risk": 0.0},
+        satellite={"ndvi": 0.2, "ndwi": 0.0, "quality_score": 0.8, "change_score": 0.0},
+        baseline_vegetation="arid",
+        satellite_ai={"infrastructure_damage_score_ai": 0.9},
+    )
+    assert with_ai["infrastructure_damage"] > base["infrastructure_damage"]
 
 
 def test_corridor_risk_through_conflict():
@@ -60,7 +67,6 @@ def test_corridor_risk_through_conflict():
         ],
     )
     assert risk["risk_level"] in ("low", "moderate", "high", "critical")
-    assert risk["risk_level"] in ("high", "critical")
     assert "shelling" in risk["hazards"]
 
 

@@ -4,7 +4,6 @@ import { useUIStore } from "@/store/uiSlice";
 import { MessageSquare, Filter } from "lucide-react";
 import { LayerControlPanel } from "@/components/map/LayerControlPanel";
 import { FilterPanel } from "@/components/map/FilterPanel";
-import { MapLegend } from "@/components/map/MapLegend";
 
 export default function MapPage() {
   const {
@@ -40,11 +39,9 @@ export default function MapPage() {
         </button>
       )}
 
-      <MapLegend />
-
       {!rightPanelOpen && (
         <button
-          className="absolute top-[76px] right-4 z-20 pointer-events-auto flex items-center gap-2 bg-popover/90 backdrop-blur-sm border border-primary/30 rounded-sm px-3 py-2 hover:border-primary transition-colors"
+          className="absolute top-[76px] right-[52px] z-20 pointer-events-auto flex items-center gap-2 bg-popover/90 backdrop-blur-sm border border-primary/30 rounded-sm px-3 py-2 hover:border-primary transition-colors"
           onClick={() => setRightPanelOpen(true)}
         >
           <MessageSquare className="w-4 h-4 text-primary" />

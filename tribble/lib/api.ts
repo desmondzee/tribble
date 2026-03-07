@@ -189,16 +189,48 @@ export async function getNewsEvents(params?: GetNewsParams): Promise<NewsEvent[]
 
 // ── HELIOS AI Chat ────────────────────────────────────────────────────
 
-export async function sendHeliosMessage(message: string): Promise<string> {
+export async function sendHeliosMessage(
+  message: string,
+  persona?: "civilian" | "organization"
+): Promise<string> {
   const url = apiUrl("/api/helios/chat");
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, persona: persona ?? undefined }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(body || `HELIOS returned ${res.status}`);
+  }
+  const data = await res.json();
+  return data.reply;
+}
+
+export async function sendEventsSummaryMessage(
+  message: string,
+  events: NewsEvent[]
+): Promise<string> {
+  const url = apiUrl("/api/helios/summarize");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      events: events.map((e) => ({
+        id: e.id,
+        headline: e.headline,
+        source: e.source,
+        severity: e.severity,
+        lat: e.lat,
+        lng: e.lng,
+        event_type: e.event_type,
+      })),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Events summary returned ${res.status}`);
   }
   const data = await res.json();
   return data.reply;
@@ -259,4 +291,58 @@ export async function getSatelliteScenes(
 export function getSatellitePreviewUrl(sceneId: string, collection = "sentinel-2-l2a"): string {
   const params = new URLSearchParams({ scene_id: sceneId, collection });
   return `${apiUrl("/api/satellite/preview")}?${params.toString()}`;
+}
+
+// ── Route suggestion (maps agent) ───────────────────────────────────────────
+
+export interface RouteSuggestParams {
+  from_lat: number;
+  from_lng: number;
+  to_lat: number;
+  to_lng: number;
+  avoid_recent_hours?: number;
+  country_iso?: string;
+}
+
+export interface RecentEventNearby {
+  id: string;
+  headline: string;
+  lat: number;
+  lng: number;
+  timestamp: string | null;
+  severity: string;
+}
+
+export interface SuggestedRoute {
+  type: "primary" | "alternative";
+  summary: string;
+  waypoints_or_corridor: number[][];
+  risk_level: string;
+  advisory: string;
+  distance_km?: number;
+  recommended?: boolean;
+}
+
+export interface RouteSuggestResponse {
+  recent_events_nearby: RecentEventNearby[];
+  suggested_routes: SuggestedRoute[];
+  narrative: string | null;
+}
+
+export async function getRouteSuggest(params: RouteSuggestParams): Promise<RouteSuggestResponse> {
+  const sp = new URLSearchParams({
+    from_lat: String(params.from_lat),
+    from_lng: String(params.from_lng),
+    to_lat: String(params.to_lat),
+    to_lng: String(params.to_lng),
+  });
+  if (params.avoid_recent_hours != null) sp.set("avoid_recent_hours", String(params.avoid_recent_hours));
+  if (params.country_iso) sp.set("country_iso", params.country_iso);
+  const url = `${apiUrl("/api/routes/suggest")}?${sp}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/routes/suggest returned ${res.status}`);
+  }
+  return res.json();
 }

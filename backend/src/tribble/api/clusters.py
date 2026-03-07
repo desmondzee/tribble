@@ -3,6 +3,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from tribble.config import get_settings
 from tribble.db import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -95,3 +96,40 @@ async def get_clusters(
             }
         )
     return {"type": "FeatureCollection", "features": features}
+
+
+@router.post("/refresh")
+async def refresh_clusters(
+    radius_km: float | None = Query(None, ge=0.1, le=500),
+    time_window_hours: int | None = Query(None, ge=1, le=8760),
+):
+    """Recompute incident clusters from report locations (PostGIS ST_ClusterDBSCAN)."""
+    try:
+        db = get_supabase()
+    except RuntimeError:
+        raise HTTPException(503, "Database unavailable")
+
+    settings = get_settings()
+    p_radius_km = radius_km if radius_km is not None else settings.cluster_radius_km
+    p_time_window_hours = time_window_hours if time_window_hours is not None else settings.cluster_time_window_hours
+
+    try:
+        result = (
+            db.rpc(
+                "refresh_incident_clusters",
+                {"p_radius_km": p_radius_km, "p_time_window_hours": p_time_window_hours},
+            )
+            .execute()
+            .data
+        )
+    except Exception as exc:
+        logger.error("Cluster refresh failed: %s", exc)
+        raise HTTPException(503, "Database query failed")
+
+    if not result or not isinstance(result, list):
+        count = 0
+    else:
+        row = result[0] if result else {}
+        count = int(row.get("clusters_updated", 0))
+
+    return {"clusters_updated": count}
