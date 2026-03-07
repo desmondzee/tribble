@@ -1,0 +1,260 @@
+/* ─── Mapbox Base Overrides ────────────────────────────────────────── */
+.mapboxgl-map {
+  font-family: var(--font-mono) !important;
+}
+
+.mapboxgl-ctrl-attrib-inner,
+.mapboxgl-ctrl-logo {
+  display: none !important;
+}
+
+.mapboxgl-ctrl-group {
+  background: rgba(11, 17, 33, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 2px !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+  backdrop-filter: blur(4px);
+}
+
+.mapboxgl-ctrl-group button {
+  background-color: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.mapboxgl-ctrl-group button:last-child {
+  border-bottom: none !important;
+}
+
+.mapboxgl-ctrl-icon {
+  filter: invert(80%) !important;
+}
+
+.mapboxgl-ctrl-group button:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* ─── Cluster Map Markers ───────────────────────────────────────────── */
+.cluster-map-marker {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.cluster-map-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+.cluster-map-marker:hover .cluster-map-dot {
+  transform: scale(1.4);
+}
+
+.cluster-map-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid;
+  opacity: 0;
+  animation: ring-expand 2.4s ease-out infinite;
+}
+
+.cluster-map-marker.high .cluster-map-ring {
+  animation-duration: 2s;
+}
+.cluster-map-marker.medium .cluster-map-ring {
+  animation-duration: 1.1s;
+}
+.cluster-map-marker.low .cluster-map-ring {
+  animation: none;
+  opacity: 0.18;
+}
+
+/* ─── Map HUD Overlay ──────────────────────────────────────────────── */
+.map-hud-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.map-hud-overlay > * {
+  pointer-events: auto;
+}
+
+.map-hud-panel {
+  background: rgba(11, 17, 33, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  padding: 10px 14px;
+  border-radius: 2px;
+}
+
+.map-hud-coords {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.map-hud-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.map-hud-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  min-width: 36px;
+  font-weight: 600;
+}
+
+.map-hud-value {
+  font-size: 11px;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+  font-family: var(--font-mono);
+}
+
+.map-mode-controls {
+  position: absolute;
+  top: 16px;
+  right: 52px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.map-layer-btn.active .map-layer-dot.satellites {
+  background: #94a3b8;
+  box-shadow: 0 0 6px #94a3b8;
+}
+.map-layer-btn.active .map-layer-dot.threed {
+  background: #818cf8;
+  box-shadow: 0 0 6px #818cf8;
+}
+.map-layer-btn .map-layer-dot.reset {
+  background: var(--text-dim);
+}
+
+.map-layer-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.map-layer-header {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 0 8px;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.map-layer-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+  border-radius: 2px;
+}
+
+.map-layer-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.map-layer-btn.active {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.map-layer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.map-layer-btn.active .map-layer-dot.clusters {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+.map-layer-btn.active .map-layer-dot.coverage {
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+}
+.map-layer-btn.active .map-layer-dot.severityZones {
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+}
+
+.map-hud-meta {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.8;
+  background: rgba(11, 17, 33, 0.6);
+  padding: 8px 12px;
+  border-radius: 2px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.map-hud-meta .highlight {
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+@keyframes ring-expand {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}

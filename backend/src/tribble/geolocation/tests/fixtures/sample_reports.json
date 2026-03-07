@@ -1,0 +1,82 @@
+[
+  {
+    "text": "Heavy shelling was reported in the eastern districts of Aleppo city. At least 12 civilians were injured near the al-Sukkari neighborhood. The Syrian Observatory for Human Rights confirmed the incident.",
+    "title": "Aleppo shelling injures civilians",
+    "source_url": "https://example.com/aleppo-1",
+    "source_name": "Example News",
+    "publish_date": "2024-01-15",
+    "source_language": "en"
+  },
+  {
+    "text": "Russian forces advanced toward Mariupol from the north. Fighting continues near the Azovstal plant.",
+    "title": "Mariupol under siege",
+    "source_url": "https://example.com/mariupol-1",
+    "source_name": "Conflict Monitor",
+    "publish_date": "2024-02-20",
+    "source_language": "en"
+  },
+  {
+    "text": "A checkpoint on the road between Kharkiv and Kupiansk was attacked. Three soldiers were killed.",
+    "title": "Checkpoint attack in Kharkiv oblast",
+    "source_url": "https://example.com/kharkiv-1",
+    "source_name": "OSINT Report",
+    "publish_date": "2024-03-01",
+    "source_language": "en"
+  },
+  {
+    "text": "The hospital in Idlib city was hit by an airstrike. Médecins Sans Frontières reported damage to the pediatric ward.",
+    "title": "Idlib hospital struck",
+    "source_url": "https://example.com/idlib-1",
+    "source_name": "Humanitarian Watch",
+    "publish_date": "2024-01-10",
+    "source_language": "en"
+  },
+  {
+    "text": "Displacement from Raqqa province continues. Families are fleeing toward the Turkish border.",
+    "title": "Raqqa displacement",
+    "source_url": "https://example.com/raqqa-1",
+    "source_name": "Refugee Monitor",
+    "publish_date": "2024-02-05",
+    "source_language": "en"
+  },
+  {
+    "text": "Springfield, Illinois reported no incidents. Springfield, Massachusetts had a minor protest.",
+    "title": "Springfield updates",
+    "source_url": "https://example.com/springfield",
+    "source_name": "US News",
+    "publish_date": "2024-03-05",
+    "source_language": "en"
+  },
+  {
+    "text": "The village of Bucha, northwest of Kyiv, was the scene of alleged atrocities. International investigators have arrived.",
+    "title": "Bucha investigation",
+    "source_url": "https://example.com/bucha",
+    "source_name": "War Crimes Desk",
+    "publish_date": "2024-02-28",
+    "source_language": "en"
+  },
+  {
+    "text": "Fighting erupted in the district of Homs. The ancient city's old quarter was damaged.",
+    "title": "Homs district clashes",
+    "source_url": "https://example.com/homs",
+    "source_name": "Syria Today",
+    "publish_date": "2024-01-22",
+    "source_language": "en"
+  },
+  {
+    "text": "A convoy was ambushed on the M4 highway near Saraqib. The road connects Aleppo and Idlib.",
+    "title": "M4 highway ambush",
+    "source_url": "https://example.com/saraqib",
+    "source_name": "Logistics Monitor",
+    "publish_date": "2024-02-12",
+    "source_language": "en"
+  },
+  {
+    "text": "The Donbas region saw renewed shelling. Donetsk and Luhansk oblasts reported casualties.",
+    "title": "Donbas shelling",
+    "source_url": "https://example.com/donbas",
+    "source_name": "Eastern Ukraine Report",
+    "publish_date": "2024-03-03",
+    "source_language": "en"
+  }
+]

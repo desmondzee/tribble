@@ -7,9 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_prefix="TRIBBLE_")
 
-    supabase_url: str
-    supabase_service_key: str = Field(repr=False)
-    supabase_anon_key: str = Field(repr=False)
+    supabase_url: str = ""
+    supabase_service_key: str = Field(default="", repr=False)
+    supabase_anon_key: str = Field(default="", repr=False)
     acled_api_key: str = Field(default="", repr=False)
     acled_email: str = ""
     openweathermap_api_key: str = Field(default="", repr=False)

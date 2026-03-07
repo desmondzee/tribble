@@ -16,6 +16,14 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+### Map
+
+The tactical map is at `/map`. It shows incident clusters from the backend API.
+
+**Env vars:**
+- `NEXT_PUBLIC_MAPBOX_TOKEN` — required; public Mapbox token (`pk.*`) from [account.mapbox.com](https://account.mapbox.com/access-tokens/)
+- `NEXT_PUBLIC_API_URL` — optional; backend base URL (default `http://localhost:8000`)
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
