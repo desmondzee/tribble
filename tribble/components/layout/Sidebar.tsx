@@ -21,6 +21,7 @@ import {
   Users,
   Activity,
   BarChart3,
+  ImageIcon,
 } from "lucide-react";
 import { spring } from "@/lib/animation-tokens";
 import { useAuthStore } from "@/store/authSlice";
@@ -43,6 +44,7 @@ const ICON_MAP = {
   Users,
   Activity,
   BarChart3,
+  ImageIcon,
 } as const;
 
 interface NavDef {
@@ -65,6 +67,7 @@ const ORG_NAV: NavDef[] = [
   { icon: "Map", label: "Intelligence Map", path: "/app/map" },
   { icon: "AlertTriangle", label: "Events", path: "/app/events", badgeKey: "events" },
   { icon: "Layers", label: "Intelligence", path: "/app/intelligence" },
+  { icon: "ImageIcon", label: "Satellite Scenes", path: "/app/satellite-scenes" },
   { icon: "Satellite", label: "Drone Fleet", path: "/app/drones" },
   { icon: "FileText", label: "Reports", path: "/app/reports" },
   { icon: "Inbox", label: "Submissions", path: "/app/submissions", badgeKey: "submissions" },

@@ -44,6 +44,21 @@ def build_stac_search_params(
     )
 
 
+def _tile_url_from_stac_links(links: list[dict]) -> str | None:
+    """Pick a viewable image URL from STAC Item links. Prefer visual/preview assets."""
+    if not links:
+        return None
+    viewable_rels = ("visual", "preview", "rendered_preview", "thumbnail")
+    for link in links:
+        rel = (link.get("rel") or "").lower()
+        title = (link.get("title") or "").lower()
+        if rel in viewable_rels or "visual" in title or "preview" in title:
+            href = link.get("href")
+            if href:
+                return href
+    return links[0].get("href") if links else None
+
+
 async def search_sentinel2_scenes(
     lat: float,
     lon: float,
@@ -66,7 +81,7 @@ async def search_sentinel2_scenes(
                 "scene_id": f["id"],
                 "acquisition_date": f.get("properties", {}).get("datetime"),
                 "cloud_cover_pct": f.get("properties", {}).get("eo:cloud_cover", 0),
-                "tile_url": links[0]["href"] if links else None,
+                "tile_url": _tile_url_from_stac_links(links),
                 "bbox": f.get("bbox"),
             })
         except (KeyError, IndexError) as exc:

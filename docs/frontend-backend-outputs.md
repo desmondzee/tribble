@@ -166,6 +166,7 @@ Call these with `fetch(NEXT_PUBLIC_API_URL + path, { method, headers, body })`. 
 ### Other
 
 - **GET** `/health` → `{ status: "ok" }` (liveness).
+- **GET** `/api/satellite/scenes?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD` → `{ scenes: SatelliteScene[], date_from, date_to }`. Requires `NEXT_PUBLIC_API_URL` to be set and the backend running; for data to appear, run the backend seed (`python -m tribble.ingest.seed_supabase`) to populate `satellite_scenes`.
 - **GET** `/api/geolocation/geojson?report_ids=id1,id2` → GeoJSON FeatureCollection (geolocated reports).
 - **POST** `/api/reports` — report submission that enqueues pipeline jobs (alternative to Supabase `submissions` if you use the full pipeline).
 

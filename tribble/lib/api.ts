@@ -138,3 +138,35 @@ export async function sendHeliosMessage(message: string): Promise<string> {
   const data = await res.json();
   return data.reply;
 }
+
+// ── Satellite Scenes ─────────────────────────────────────────────────────
+
+export interface SatelliteScene {
+  id: string;
+  scene_id: string;
+  acquisition_date: string | null;
+  cloud_cover_pct: number | null;
+  tile_url: string | null;
+  bbox: number[] | null;
+  ndvi: number | null;
+  ndwi: number | null;
+  lat: number;
+  lng: number;
+}
+
+export interface SatelliteScenesResponse {
+  scenes: SatelliteScene[];
+  date_from: string;
+  date_to: string;
+}
+
+export async function getSatelliteScenes(
+  dateFrom: string,
+  dateTo: string
+): Promise<SatelliteScenesResponse> {
+  const sp = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  const url = `${apiUrl("/api/satellite/scenes")}?${sp}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`API /api/satellite/scenes returned ${res.status}`);
+  return res.json();
+}
