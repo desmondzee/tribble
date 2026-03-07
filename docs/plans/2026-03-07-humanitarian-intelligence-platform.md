@@ -1,5 +1,6 @@
 # Tribble — Humanitarian Intelligence Platform
 
+> **For Codex:** Use the `executing-plans` skill to implement this plan task-by-task.
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Backend-first humanitarian intelligence system. Multi-source crisis data flows through a deterministic LangGraph pipeline, gets scored across 9 confidence signals, clusters spatiotemporally, and serves GeoJSON to a map.
