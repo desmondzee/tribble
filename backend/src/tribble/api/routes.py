@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from tribble.config import get_settings
 from tribble.db import get_supabase
-from tribble.services.gemini_provider import GeminiProvider
+from tribble.services.anthropic_provider import AnthropicProvider
 from tribble.services.risk_scoring import compute_corridor_risk
 from tribble.utils.geo import haversine_km
 
@@ -355,7 +355,7 @@ async def _suggest_impl(
 
     narrative = None
     settings = get_settings()
-    if settings.gemini_api_key and (recent_events_nearby or alternative_route):
+    if settings.anthropic_api_key and (recent_events_nearby or alternative_route):
         prompt = """You are a humanitarian routing advisor. In 1-2 short sentences, give a suggestion only:
 - Mention which recent events affect the area (if any).
 - Suggest that aid avoid the direct route when there are multiple incidents; recommend the alternative when available.
@@ -368,8 +368,8 @@ Use phrases like "we suggest avoiding" or "we do not recommend sending aid throu
         if alternative_route:
             prompt += f" Alternative route risk: {alternative_route['risk_level']} (suggested when direct is not recommended)."
         try:
-            gemini = GeminiProvider(api_key=settings.gemini_api_key, model=settings.gemini_model)
-            result = await gemini.generate(prompt)
+            llm = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
+            result = await llm.generate(prompt)
             if result.status == "ok" and result.text:
                 narrative = result.text.strip()
         except Exception as exc:

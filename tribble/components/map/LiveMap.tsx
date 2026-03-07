@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import type { Map as MapboxMap, FillLayer, LineLayer } from "mapbox-gl";
 import Map, {
   Marker,
@@ -74,7 +74,7 @@ const LAYER_META = [
   { key: "boundaries", label: "BOUNDARIES" },
   { key: "events", label: "EVENTS" },
   { key: "ngoZones", label: "NGO ZONES" },
-  { key: "routes", label: "ROUTES" },
+  { key: "routes", label: "ROUTES & RELIEF EN ROUTE" },
   { key: "geolocation", label: "GEOLOCATION" },
 ] as const;
 
@@ -138,6 +138,7 @@ export default function LiveMap() {
     setSelectedClusterId,
     locationPickMode,
     setLocationPickMode,
+    rightPanelOpen,
   } = useUIStore();
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
@@ -158,7 +159,6 @@ export default function LiveMap() {
   });
   const [mapMode, setMapMode] = useState<"satellite" | "3d">("satellite");
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [layersPanelOpen, setLayersPanelOpen] = useState(true);
   const [legendOpen, setLegendOpen] = useState(false);
   const mapRef = useRef<MapboxMap | null>(null);
 
@@ -447,10 +447,22 @@ export default function LiveMap() {
               id="routes-line"
               type="line"
               paint={{
-                "line-color": "#38bdf8",
+                "line-color": [
+                  "match",
+                  ["get", "type"],
+                  "relief_run",
+                  "#22c55e",
+                  "#38bdf8",
+                ],
                 "line-width": 2,
                 "line-opacity": 0.7,
-                "line-dasharray": [2, 2],
+                "line-dasharray": [
+                  "match",
+                  ["get", "type"],
+                  "relief_run",
+                  [4, 2],
+                  [2, 2],
+                ],
               }}
             />
           </Source>
@@ -597,9 +609,22 @@ export default function LiveMap() {
               RESET VIEW
             </button>
           )}
+          {!rightPanelOpen && (
+            <button
+              type="button"
+              className="map-layer-btn flex items-center gap-2 w-full"
+              onClick={() => {
+                setRightPanelOpen(true);
+                setRightPanelTab("agent");
+              }}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-primary" />
+              <span>HELIOS</span>
+            </button>
+          )}
         </div>
 
-        {/* Right stack: Legend on top, Layers below; same panel style and text size */}
+        {/* Right: single LEGEND panel with Severity + Layers inside */}
         <div className="map-right-stack">
           <div className="map-legend-controls map-hud-panel">
             <button
@@ -619,73 +644,49 @@ export default function LiveMap() {
             <AnimatePresence initial={false}>
               {legendOpen && (
                 <motion.div
-                  className="flex flex-col gap-1.5 pt-2 pb-0"
+                  className="flex flex-col gap-2 pt-2 pb-0"
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <p className="map-layer-header mb-1">SEVERITY</p>
-                  <div className="space-y-1.5">
-                    {LEGEND_SEVERITY_ITEMS.map((item) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center gap-2 map-legend-row"
-                      >
+                  <div>
+                    <p className="map-layer-header mb-1">SEVERITY</p>
+                    <div className="space-y-1.5">
+                      {LEGEND_SEVERITY_ITEMS.map((item) => (
                         <div
-                          className="w-2 h-2 rounded-sm flex-shrink-0"
-                          style={{ backgroundColor: item.color }}
-                        />
-                        <span className="map-legend-item">{item.label}</span>
-                      </div>
-                    ))}
+                          key={item.label}
+                          className="flex items-center gap-2 map-legend-row"
+                        >
+                          <div
+                            className="w-2 h-2 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="map-legend-item">{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="map-layer-header mb-1">LAYERS</p>
+                    <div className="flex flex-col gap-0.5">
+                      {LAYER_META.map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
+                          onClick={() => toggleLayer(key)}
+                        >
+                          <span className={`map-layer-dot ${key}`} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-        <div className="map-layer-controls map-hud-panel">
-          <div className="flex flex-col-reverse gap-0 min-w-[130px]">
-            {/* Bar: always visible, click toggles dropdown */}
-            <button
-              type="button"
-              className="map-layer-controls-bar flex items-center justify-between gap-2 w-full py-2 px-2 rounded-sm hover:bg-white/5 transition-colors"
-              onClick={() => setLayersPanelOpen((o) => !o)}
-              aria-expanded={layersPanelOpen}
-              aria-label={layersPanelOpen ? "Minimize layers" : "Expand layers"}
-            >
-              <span className="map-layer-header mb-0">LAYERS</span>
-              {layersPanelOpen ? (
-                <ChevronUp className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
-              )}
-            </button>
-            <AnimatePresence initial={false}>
-              {layersPanelOpen && (
-                <motion.div
-                  className="flex flex-col gap-0.5 pt-1 pb-0"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  {LAYER_META.map(({ key, label }) => (
-                    <button
-                      key={key}
-                      className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
-                      onClick={() => toggleLayer(key)}
-                    >
-                      <span className={`map-layer-dot ${key}`} />
-                      {label}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
         </div>
 
         <div className="map-hud-meta">
@@ -705,7 +706,7 @@ export default function LiveMap() {
             <span className="map-hud-label">ZOOM</span>
             <span className="map-hud-value">{viewState.zoom.toFixed(1)}</span>
           </div>
-          <div>PROJ: MERCATOR</div>
+          <div className="map-hud-meta-divider">PROJ: MERCATOR</div>
           <div>DATUM: WGS84</div>
           <div className="highlight">
             {clusters.features.length} CLUSTERS

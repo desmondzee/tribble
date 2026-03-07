@@ -230,7 +230,18 @@ export async function sendEventsSummaryMessage(
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(body || `Events summary returned ${res.status}`);
+    const msg =
+      res.status === 503 && body.includes("not configured")
+        ? "Summary unavailable. Set TRIBBLE_ANTHROPIC_API_KEY in the backend .env and restart the backend."
+        : (() => {
+            try {
+              const o = JSON.parse(body);
+              return typeof o.detail === "string" ? o.detail : body || `Events summary returned ${res.status}`;
+            } catch {
+              return body || `Events summary returned ${res.status}`;
+            }
+          })();
+    throw new Error(msg);
   }
   const data = await res.json();
   return data.reply;
@@ -343,6 +354,105 @@ export async function getRouteSuggest(params: RouteSuggestParams): Promise<Route
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(body || `API /api/routes/suggest returned ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── NGO Relief runs (submit + list for map and cluster panel) ────────────────
+
+export interface ReliefRunSubmission {
+  origin: { lat: number; lng: number; name?: string };
+  destination: { lat: number; lng: number; name?: string };
+  what_doing: string;
+  what_providing: string[];
+  cluster_id?: string;
+  organisation_name?: string;
+  country_iso?: string;
+}
+
+export interface ReliefRunResponse {
+  id: string;
+  status: string;
+}
+
+export interface ReliefRunItem {
+  id: string;
+  origin_lat: number;
+  origin_lng: number;
+  origin_name: string | null;
+  destination_lat: number;
+  destination_lng: number;
+  destination_name: string | null;
+  what_doing: string;
+  what_providing: string[];
+  organisation_name: string;
+  cluster_id: string | null;
+  status: string;
+  created_at: string;
+}
+
+export interface ReliefRunsResponse {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    geometry: { type: "LineString"; coordinates: [number, number][] };
+    properties: {
+      id: string;
+      type: "relief_run";
+      what_doing: string;
+      what_providing: string[];
+      organisation_name: string;
+      cluster_id: string | null;
+      status: string;
+    };
+  }>;
+  items: ReliefRunItem[];
+}
+
+export interface GetReliefParams {
+  cluster_id?: string;
+  country_iso?: string;
+  status?: string;
+  bbox?: string;
+  limit?: number;
+}
+
+export async function getReliefRuns(params?: GetReliefParams): Promise<ReliefRunsResponse> {
+  const sp = new URLSearchParams();
+  if (params?.cluster_id) sp.set("cluster_id", params.cluster_id);
+  if (params?.country_iso) sp.set("country_iso", params.country_iso);
+  if (params?.status) sp.set("status", params.status);
+  if (params?.bbox) sp.set("bbox", params.bbox);
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  const url = sp.size ? `${apiUrl("/api/relief")}?${sp}` : apiUrl("/api/relief");
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/relief returned ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getReliefRunsByCluster(clusterId: string): Promise<{ items: ReliefRunItem[] }> {
+  const url = apiUrl(`/api/clusters/${clusterId}/relief`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/clusters/${clusterId}/relief returned ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function submitReliefRun(data: ReliefRunSubmission): Promise<ReliefRunResponse> {
+  const url = apiUrl("/api/relief");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/relief returned ${res.status}`);
   }
   return res.json();
 }

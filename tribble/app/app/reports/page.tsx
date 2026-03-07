@@ -200,7 +200,7 @@ export default function ReportsPage() {
         </h2>
       </div>
       <p className="font-body text-sm text-muted-foreground mb-6">
-        Reports you have submitted. Click a card to view the location on the
+        Reports you&apos;ve submitted. Click a card to view the location on the
         map.
       </p>
       {myReports.length === 0 ? (

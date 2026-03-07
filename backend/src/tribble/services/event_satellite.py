@@ -13,7 +13,7 @@ from tribble.ingest.satellite import (
     search_sentinel2_scenes,
     viewable_preview_url,
 )
-from tribble.services.gemini_provider import GeminiProvider
+from tribble.services.anthropic_provider import AnthropicProvider
 from tribble.services.satellite_vision import get_or_create_ai_analysis_async
 from tribble.utils.geo import bbox_centred_on_point
 
@@ -70,7 +70,7 @@ async def parse_event_for_satellite(
 ) -> dict:
     """Parse event with context-driven LLM; return event_category, what_to_check, location_summary."""
     settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
+    if not (settings.anthropic_api_key or "").strip():
         return {
             "event_category": "other",
             "location_summary": "",
@@ -87,9 +87,9 @@ async def parse_event_for_satellite(
         ontology_hint=ontology_hint,
     )
 
-    provider = GeminiProvider(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+    provider = AnthropicProvider(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
     )
     result = await provider.generate(prompt)
 
@@ -122,9 +122,9 @@ async def parse_event_for_satellite(
 
 
 async def extract_event_from_image(image_url: str) -> str:
-    """Use Gemini vision to extract event description from an image (OCR). Returns plain text."""
+    """Use Claude vision to extract event description from an image (OCR). Returns plain text."""
     settings = get_settings()
-    if not (settings.gemini_api_key or "").strip():
+    if not (settings.anthropic_api_key or "").strip():
         return ""
 
     try:
@@ -143,9 +143,9 @@ async def extract_event_from_image(image_url: str) -> str:
     if ".jpg" in image_url.lower() or ".jpeg" in image_url.lower():
         mime_type = "image/jpeg"
 
-    provider = GeminiProvider(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+    provider = AnthropicProvider(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
     )
     result = await provider.generate_with_image(
         prompt=EVENT_OCR_PROMPT,
@@ -275,7 +275,7 @@ async def synthesize_aid_impact(
 ) -> dict:
     """LLM synthesis: does event affect aid response? Summary across snapshots."""
     settings = get_settings()
-    if not (settings.gemini_api_key or "").strip() or not snapshots:
+    if not (settings.anthropic_api_key or "").strip() or not snapshots:
         return {
             "affects_aid_response": "uncertain",
             "infrastructure_note": "No satellite analysis available.",
@@ -299,9 +299,9 @@ async def synthesize_aid_impact(
         snapshots_text="\n".join(lines),
     )
 
-    provider = GeminiProvider(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+    provider = AnthropicProvider(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
     )
     result = await provider.generate(prompt)
 

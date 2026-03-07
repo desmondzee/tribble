@@ -28,11 +28,11 @@ def test_parse_ai_response_valid_json():
         "infrastructure_damage_score_ai": 0.4,
         "labels": ["flood_extent"],
     })
-    out = _parse_ai_response(text, model="gemini-2.5-flash")
+    out = _parse_ai_response(text, model="claude-3-5-haiku-20241022")
     assert out.flood_score_ai == 0.7
     assert out.infrastructure_damage_score_ai == 0.4
     assert out.labels == ["flood_extent"]
-    assert out.model == "gemini-2.5-flash"
+    assert out.model == "claude-3-5-haiku-20241022"
 
 
 def test_parse_ai_response_json_in_markdown():
@@ -71,7 +71,7 @@ def test_parse_ai_response_invalid_json_returns_no_signal():
 async def test_analyze_satellite_image_disabled_returns_no_signal():
     with patch("tribble.services.satellite_vision.get_settings") as m:
         m.return_value.enable_satellite_ai_analysis = False
-        m.return_value.gemini_api_key = "key"
+        m.return_value.anthropic_api_key = "key"
         result = await analyze_satellite_image(
             image_url="https://example.com/tile.png",
             bbox=[0, 0, 1, 1],
@@ -85,8 +85,8 @@ async def test_analyze_satellite_image_disabled_returns_no_signal():
 async def test_analyze_satellite_image_no_api_key_returns_no_signal():
     with patch("tribble.services.satellite_vision.get_settings") as m:
         m.return_value.enable_satellite_ai_analysis = True
-        m.return_value.gemini_api_key = ""
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = ""
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
         result = await analyze_satellite_image(
             image_url="https://example.com/tile.png",
             bbox=[],
@@ -99,8 +99,8 @@ async def test_analyze_satellite_image_no_api_key_returns_no_signal():
 async def test_analyze_satellite_image_fetch_failure_returns_no_signal():
     with patch("tribble.services.satellite_vision.get_settings") as m:
         m.return_value.enable_satellite_ai_analysis = True
-        m.return_value.gemini_api_key = "key"
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = "key"
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
     with patch("tribble.services.satellite_vision.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.get = AsyncMock(
             side_effect=Exception("network error"),
@@ -126,20 +126,20 @@ async def test_analyze_satellite_image_success_parses_response():
             "infrastructure_damage_score_ai": 0.3,
             "labels": ["flood_extent"],
         }),
-        "model": "gemini-2.5-flash",
+        "model": "claude-3-5-haiku-20241022",
     })()
 
     get_obj = MagicMock()
     get_obj.get = AsyncMock(return_value=MagicMock(content=b"fake_png_bytes", raise_for_status=MagicMock()))
     with patch("tribble.config.get_settings") as m:
         m.return_value.enable_satellite_ai_analysis = True
-        m.return_value.gemini_api_key = "key"
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = "key"
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
         with patch("tribble.services.satellite_vision.get_settings", m):
             with patch("tribble.services.satellite_vision.httpx.AsyncClient") as mock_client:
                 mock_client.return_value.__aenter__ = AsyncMock(return_value=get_obj)
                 mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
-                with patch("tribble.services.satellite_vision.GeminiProvider") as MockProvider:
+                with patch("tribble.services.satellite_vision.AnthropicProvider") as MockProvider:
                     mock_instance = MagicMock()
                     mock_instance.generate_with_image = AsyncMock(return_value=llm_response)
                     MockProvider.return_value = mock_instance
@@ -158,7 +158,7 @@ def test_satellite_ai_analysis_to_dict_for_fusion():
         flood_score_ai=0.7,
         infrastructure_damage_score_ai=0.4,
         labels=["flood_extent"],
-        model="gemini-2.5-flash",
+        model="claude-3-5-haiku-20241022",
     )
     d = a.to_dict_for_fusion()
     assert d["flood_score_ai"] == 0.7

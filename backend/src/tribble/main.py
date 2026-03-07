@@ -5,6 +5,7 @@ from tribble.api.assistant import router as assistant_router
 from tribble.api.clusters import router as clusters_router
 from tribble.api.geolocation import router as geolocation_router
 from tribble.api.realtime import router as realtime_router
+from tribble.api.relief import router as relief_router
 from tribble.api.reports import router as reports_router
 from tribble.api.routes import router as routes_router
 from tribble.api.simulation import router as simulation_router
@@ -21,6 +22,7 @@ from tribble.db import get_supabase
 
 app = FastAPI(title="Tribble", version="0.1.0")
 app.include_router(reports_router)
+app.include_router(relief_router)
 app.include_router(routes_router)
 app.include_router(clusters_router)
 app.include_router(geolocation_router)

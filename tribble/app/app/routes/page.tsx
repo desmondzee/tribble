@@ -8,6 +8,7 @@ import {
   type RecentEventNearby,
 } from "@/lib/api";
 import { MapPin, Route, AlertTriangle, Loader2 } from "lucide-react";
+import { CollapsibleFormPanel } from "@/components/CollapsibleFormPanel";
 
 const AVOID_HOURS_OPTIONS = [24, 72, 168] as const;
 const RISK_COLOR: Record<string, string> = {
@@ -150,15 +151,12 @@ export default function RoutesPage() {
 
   return (
     <div className="pointer-events-auto p-6 max-w-2xl">
-      <h2 className="font-heading text-lg tracking-wider text-foreground">
-        SAFE ROUTES
-      </h2>
-      <p className="font-body text-sm text-muted-foreground mt-2">
-        Get route suggestions that avoid recent incidents. Enter origin and
-        destination coordinates and how far back to consider events.
-      </p>
-
-      <div className="mt-6 space-y-4">
+      <CollapsibleFormPanel
+        title="SAFE ROUTES"
+        subtitle="Get route suggestions that avoid recent incidents. Enter origin and destination coordinates and how far back to consider events."
+        icon={<Route className="w-4 h-4" />}
+      >
+      <div className="space-y-4">
         <div>
           <label className="font-mono text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
             Origin (lat, lng)
@@ -279,6 +277,7 @@ export default function RoutesPage() {
           )}
         </div>
       )}
+      </CollapsibleFormPanel>
     </div>
   );
 }

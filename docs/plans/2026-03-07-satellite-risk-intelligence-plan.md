@@ -4,9 +4,9 @@
 
 **Goal:** Make pipeline enrichment nodes real (corroborate, enrich_weather, classify, score) and add a GET /api/analysis/dashboard endpoint that returns structured risk zones, corridor advisories, and satellite viewer links for NGO operations.
 
-**Architecture:** Fill 4 pipeline stubs so every civilian report gets multi-source validation (ACLED + weather + satellite + cross-reports). Add a dashboard aggregation endpoint that computes per-cluster risk profiles, pairwise corridor advisories, and Gemini narrative summaries. Satellite viewer URLs let NGOs visually inspect raw imagery.
+**Architecture:** Fill 4 pipeline stubs so every civilian report gets multi-source validation (ACLED + weather + satellite + cross-reports). Add a dashboard aggregation endpoint that computes per-cluster risk profiles, pairwise corridor advisories, and Claude narrative summaries. Satellite viewer URLs let NGOs visually inspect raw imagery.
 
-**Tech Stack:** Python 3.12, FastAPI, LangGraph, Supabase (PostGIS), Gemini LLM, Sentinel-2 via Planetary Computer, Open-Meteo weather
+**Tech Stack:** Python 3.12, FastAPI, LangGraph, Supabase (PostGIS), Claude (Anthropic) LLM, Sentinel-2 via Planetary Computer, Open-Meteo weather
 
 ---
 
@@ -1146,19 +1146,19 @@ def _mock_supabase():
 
 
 @patch("tribble.api.analysis.get_supabase")
-@patch("tribble.api.analysis.GeminiProvider")
-def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
+@patch("tribble.api.analysis.AnthropicProvider")
+def test_dashboard_returns_zones(mock_llm_cls, mock_get_sb):
     mock_get_sb.return_value = _mock_supabase()
 
-    mock_gemini = MagicMock()
-    mock_gemini.generate = MagicMock()
+    mock_llm = MagicMock()
+    mock_llm.generate = MagicMock()
     # Make generate an async mock
     import asyncio
     from tribble.services.llm_provider import LLMResult
-    mock_gemini.generate.return_value = asyncio.coroutine(
-        lambda: LLMResult(status="ok", text="Risk assessment narrative", model="gemini-2.5-flash", metadata={"provider": "gemini"})
+    mock_llm.generate.return_value = asyncio.coroutine(
+        lambda: LLMResult(status="ok", text="Risk assessment narrative", model="claude-3-5-haiku", metadata={"provider": "anthropic"})
     )()
-    mock_gemini_cls.return_value = mock_gemini
+    mock_llm_cls.return_value = mock_llm
 
     response = client.get("/api/analysis/dashboard")
     assert response.status_code == 200
@@ -1365,7 +1365,7 @@ async def get_dashboard():
             "risk_level": risk_level,
             "corroboration": corroboration,
             "satellite_context": satellite_context,
-            "narrative": None,  # filled by Gemini below
+            "narrative": None,  # filled by LLM below
         })
 
     # Corridor advisories between cluster pairs within 25km
@@ -1399,12 +1399,12 @@ async def get_dashboard():
                 "distance_km": corridor["distance_km"],
                 "risk_level": corridor["risk_level"],
                 "hazards": corridor["hazards"],
-                "advisory": None,  # filled by Gemini below
+                "advisory": None,  # filled by LLM below
             })
 
-    # Generate Gemini narratives for high-risk zones
+    # Generate LLM narratives for high-risk zones
     high_risk_zones = [z for z in zones if z["risk_level"] in ("critical", "high")]
-    if high_risk_zones and settings.gemini_api_key:
+    if high_risk_zones and settings.anthropic_api_key:
         zone_summaries = "\n".join(
             f"- {z['location']}: risk_level={z['risk_level']}, top_risks={z['top_risks']}, "
             f"acled_events={z['corroboration']['acled_events_nearby']}, reports={z['report_count']}, "
@@ -1429,8 +1429,8 @@ End with a 2-3 sentence overall situation summary.
 
 Be specific about risk types and actionable. No hedging."""
 
-        gemini = GeminiProvider(api_key=settings.gemini_api_key, model=settings.gemini_model)
-        llm_result = await gemini.generate(narrative_prompt)
+        llm = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
+        llm_result = await llm.generate(narrative_prompt)
 
         if llm_result.status == "ok" and llm_result.text:
             # Simple parsing: assign full narrative; frontend can split

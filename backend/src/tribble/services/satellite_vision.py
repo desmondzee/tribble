@@ -9,7 +9,7 @@ import httpx
 
 from tribble.config import get_settings
 from tribble.models.satellite_ai import SatelliteAIAnalysis
-from tribble.services.gemini_provider import GeminiProvider
+from tribble.services.anthropic_provider import AnthropicProvider
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ async def analyze_satellite_image(
 ) -> SatelliteAIAnalysis:
     """Run vision model on satellite preview image; return area-level analysis or no_signal on failure."""
     settings = get_settings()
-    if not settings.enable_satellite_ai_analysis or not (settings.gemini_api_key or "").strip():
+    if not settings.enable_satellite_ai_analysis or not (settings.anthropic_api_key or "").strip():
         return SatelliteAIAnalysis.no_signal()
 
     # Fetch image bytes
@@ -84,9 +84,9 @@ async def analyze_satellite_image(
     if ".jpg" in image_url.lower() or ".jpeg" in image_url.lower():
         mime_type = "image/jpeg"
 
-    provider = GeminiProvider(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+    provider = AnthropicProvider(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
     )
     result = await provider.generate_with_image(
         prompt=SATELLITE_VISION_PROMPT,

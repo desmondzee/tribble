@@ -15,6 +15,7 @@ import {
   Inbox,
   Send,
   Route,
+  Truck,
   Bell,
   Shield,
   Users,
@@ -37,6 +38,7 @@ const ICON_MAP = {
   Inbox,
   Send,
   Route,
+  Truck,
   Bell,
   Shield,
   Users,
@@ -55,7 +57,7 @@ interface NavDef {
 const CIVILIAN_NAV: NavDef[] = [
   { icon: "Map", label: "Map", path: "/app/map" },
   { icon: "Send", label: "Submit Report", path: "/app/submit" },
-  { icon: "FileText", label: "My Reports", path: "/app/reports" },
+  { icon: "Inbox", label: "Submissions", path: "/app/submissions" },
   { icon: "Route", label: "Safe Routes", path: "/app/routes" },
   { icon: "Bell", label: "Alerts", path: "/app/alerts" },
   { icon: "Settings", label: "Settings", path: "/app/settings" },
@@ -68,6 +70,7 @@ const ORG_NAV: NavDef[] = [
   { icon: "ImageIcon", label: "Satellite Scenes", path: "/app/satellite-scenes" },
   { icon: "FileText", label: "Reports", path: "/app/reports" },
   { icon: "Inbox", label: "Submissions", path: "/app/submissions", badgeKey: "submissions" },
+  { icon: "Truck", label: "Submit relief", path: "/app/relief" },
   { icon: "BarChart3", label: "Analytics", path: "/app/analytics" },
   { icon: "Settings", label: "Settings", path: "/app/settings" },
 ];
@@ -89,7 +92,7 @@ const ROLE_NAV: Record<AppRole, NavDef[]> = {
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarExpanded, setSidebarExpanded } = useUIStore();
+  const { sidebarExpanded, setSidebarExpanded, submissionQueueMinimised, setSubmissionQueueMinimised } = useUIStore();
   const { user, logout } = useAuthStore();
   const { activeRole } = useRoleStore();
   const [showUserPopover, setShowUserPopover] = useState(false);
@@ -168,16 +171,14 @@ export function Sidebar() {
       <nav className="flex-1 py-2 space-y-0.5 px-2 overflow-hidden">
         {navItems.map((item) => {
           const isActive = pathname === item.path;
+          const isSubmissions = item.path === "/app/submissions";
           const badge = item.badgeKey ? badges[item.badgeKey] : 0;
           const IconComponent = ICON_MAP[item.icon];
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`group flex items-center gap-3 h-9 px-2 rounded-sm transition-all relative ${
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
+          const linkClass = `group flex items-center gap-3 h-9 px-2 rounded-sm transition-all relative ${
+            isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+          }`;
+          const content = (
+            <>
               {isActive && (
                 <motion.div
                   layoutId="sidebar-active"
@@ -220,6 +221,28 @@ export function Sidebar() {
                   </motion.span>
                 )}
               </AnimatePresence>
+            </>
+          );
+          if (isSubmissions && isActive) {
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => setSubmissionQueueMinimised(!submissionQueueMinimised)}
+                className={linkClass}
+              >
+                {content}
+              </button>
+            );
+          }
+          return (
+            <Link
+              key={item.path}
+              href={item.path}
+              className={linkClass}
+              onClick={() => isSubmissions && setSubmissionQueueMinimised(false)}
+            >
+              {content}
             </Link>
           );
         })}

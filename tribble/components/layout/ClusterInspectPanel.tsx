@@ -9,11 +9,13 @@ import {
   Radio,
   FileText,
   Loader2,
+  Truck,
 } from "lucide-react";
+import Link from "next/link";
 import { useUIStore } from "@/store/uiSlice";
 import { useData } from "@/context/DataContext";
-import { sendEventsSummaryMessage } from "@/lib/api";
-import type { NewsEvent } from "@/lib/api";
+import { sendEventsSummaryMessage, getReliefRunsByCluster } from "@/lib/api";
+import type { NewsEvent, ReliefRunItem } from "@/lib/api";
 
 const SEVERITY_LABEL: Record<string, { text: string; color: string }> = {
   high: { text: "HIGH THREAT", color: "text-red-400" },
@@ -107,6 +109,20 @@ function EventsSummaryBlock({ events }: { events: NewsEvent[] }) {
 export function ClusterInspectPanel() {
   const { selectedClusterId } = useUIStore();
   const { clusters, newsEvents } = useData();
+  const [reliefRuns, setReliefRuns] = useState<ReliefRunItem[]>([]);
+  const [reliefLoading, setReliefLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedClusterId) {
+      setReliefRuns([]);
+      return;
+    }
+    setReliefLoading(true);
+    getReliefRunsByCluster(selectedClusterId)
+      .then((res) => setReliefRuns(res.items))
+      .catch(() => setReliefRuns([]))
+      .finally(() => setReliefLoading(false));
+  }, [selectedClusterId]);
 
   const feature = useMemo(
     () =>
@@ -306,6 +322,57 @@ export function ClusterInspectPanel() {
       {nearbyEvents.length > 0 && (
         <EventsSummaryBlock events={nearbyEvents} />
       )}
+
+      {/* Relief en route */}
+      <div className="pt-2 border-t border-border">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <Truck className="w-3 h-3 text-green-500" />
+          <p className="font-mono text-[9px] tracking-wider text-muted-foreground">
+            RELIEF EN ROUTE
+          </p>
+        </div>
+        {reliefLoading && (
+          <div className="flex items-center gap-2 py-2">
+            <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+            <span className="font-mono text-[10px] text-muted-foreground">
+              Loading...
+            </span>
+          </div>
+        )}
+        {!reliefLoading && reliefRuns.length === 0 && (
+          <p className="font-mono text-[10px] text-muted-foreground/60">
+            No relief runs linked to this cluster yet
+          </p>
+        )}
+        {!reliefLoading && reliefRuns.length > 0 && (
+          <div className="space-y-2">
+            {reliefRuns.map((run) => (
+              <div
+                key={run.id}
+                className="p-2 rounded-sm bg-green-500/5 border border-green-500/20"
+              >
+                <p className="font-mono text-[10px] text-foreground/90 font-medium">
+                  {run.organisation_name}
+                </p>
+                <p className="text-[10px] text-foreground/75 mt-0.5 line-clamp-2">
+                  {run.what_doing}
+                </p>
+                <p className="font-mono text-[9px] text-muted-foreground mt-1">
+                  Providing: {run.what_providing.join(", ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        {!reliefLoading && (
+          <Link
+            href={`/app/relief?cluster=${selectedClusterId ?? ""}`}
+            className="inline-block font-mono text-[10px] text-primary hover:underline mt-1"
+          >
+            We&apos;re responding to this cluster →
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

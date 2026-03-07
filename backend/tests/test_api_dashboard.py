@@ -78,17 +78,17 @@ def _mock_supabase():
 
 @patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock, return_value=SatelliteAIAnalysis.no_signal())
 @patch("tribble.api.analysis.get_supabase")
-@patch("tribble.api.analysis.GeminiProvider")
-def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb, mock_ai_analysis):
+@patch("tribble.api.analysis.AnthropicProvider")
+def test_dashboard_returns_zones(mock_llm_cls, mock_get_sb, mock_ai_analysis):
     mock_get_sb.return_value = _mock_supabase()
 
-    mock_gemini = MagicMock()
+    mock_llm = MagicMock()
 
     async def fake_generate(prompt):
-        return LLMResult(status="ok", text="Risk assessment narrative", model="gemini-2.5-flash", metadata={"provider": "gemini"})
+        return LLMResult(status="ok", text="Risk assessment narrative", model="claude-3-5-haiku-20241022", metadata={"provider": "anthropic"})
 
-    mock_gemini.generate = fake_generate
-    mock_gemini_cls.return_value = mock_gemini
+    mock_llm.generate = fake_generate
+    mock_llm_cls.return_value = mock_llm
 
     response = client.get("/api/analysis/dashboard")
     assert response.status_code == 200
@@ -106,17 +106,17 @@ def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb, mock_ai_analysis)
 
 @patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock)
 @patch("tribble.api.analysis.get_supabase")
-@patch("tribble.api.analysis.GeminiProvider")
-def test_dashboard_satellite_confirmed_includes_infrastructure_damage_when_ai_high(mock_gemini_cls, mock_get_sb, mock_ai_analysis):
+@patch("tribble.api.analysis.AnthropicProvider")
+def test_dashboard_satellite_confirmed_includes_infrastructure_damage_when_ai_high(mock_llm_cls, mock_get_sb, mock_ai_analysis):
     mock_get_sb.return_value = _mock_supabase()
-    mock_gemini_cls.return_value.generate = AsyncMock(
-        return_value=LLMResult(status="ok", text="Narrative", model="gemini", metadata={})
+    mock_llm_cls.return_value.generate = AsyncMock(
+        return_value=LLMResult(status="ok", text="Narrative", model="anthropic", metadata={})
     )
     high_infra = SatelliteAIAnalysis(
         flood_score_ai=0.2,
         infrastructure_damage_score_ai=0.8,
         labels=["possible_infrastructure_damage"],
-        model="gemini",
+        model="claude-3-5-haiku-20241022",
     )
     mock_ai_analysis.return_value = high_infra
 

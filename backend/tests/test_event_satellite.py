@@ -49,8 +49,8 @@ def test_time_window_to_date_range():
 @pytest.mark.asyncio
 async def test_parse_event_for_satellite_no_api_key_returns_defaults():
     with patch("tribble.services.event_satellite.get_settings") as m:
-        m.return_value.gemini_api_key = ""
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = ""
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
         out = await parse_event_for_satellite("Missile strike on hospital in X.")
     assert out["event_category"] == "other"
     assert "what_to_check" in out
@@ -59,11 +59,11 @@ async def test_parse_event_for_satellite_no_api_key_returns_defaults():
 
 
 @pytest.mark.asyncio
-async def test_parse_event_for_satellite_mocked_gemini():
+async def test_parse_event_for_satellite_mocked_claude():
     with patch("tribble.services.event_satellite.get_settings") as m:
-        m.return_value.gemini_api_key = "key"
-        m.return_value.gemini_model = "gemini-2.5-flash"
-        with patch("tribble.services.event_satellite.GeminiProvider") as MockProvider:
+        m.return_value.anthropic_api_key = "key"
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
+        with patch("tribble.services.event_satellite.AnthropicProvider") as MockProvider:
             mock_instance = MagicMock()
             mock_instance.generate = AsyncMock(
                 return_value=MagicMock(
@@ -98,8 +98,8 @@ async def test_synthesize_aid_impact_no_snapshots_returns_uncertain():
 @pytest.mark.asyncio
 async def test_synthesize_aid_impact_no_api_key():
     with patch("tribble.services.event_satellite.get_settings") as m:
-        m.return_value.gemini_api_key = ""
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = ""
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
         out = await synthesize_aid_impact(
             {"event_category": "other", "location_summary": "", "what_to_check": []},
             [{"period_label": "at_event", "acquisition_date": "2024-05-15", "satellite_analysis": {"flood_score_ai": 0.1, "infrastructure_damage_score_ai": 0.2, "labels": []}}],
@@ -110,11 +110,11 @@ async def test_synthesize_aid_impact_no_api_key():
 
 
 @pytest.mark.asyncio
-async def test_synthesize_aid_impact_mocked_gemini():
+async def test_synthesize_aid_impact_mocked_claude():
     with patch("tribble.services.event_satellite.get_settings") as m:
-        m.return_value.gemini_api_key = "key"
-        m.return_value.gemini_model = "gemini-2.5-flash"
-        with patch("tribble.services.event_satellite.GeminiProvider") as MockProvider:
+        m.return_value.anthropic_api_key = "key"
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
+        with patch("tribble.services.event_satellite.AnthropicProvider") as MockProvider:
             mock_instance = MagicMock()
             mock_instance.generate = AsyncMock(
                 return_value=MagicMock(
@@ -157,8 +157,8 @@ async def test_get_snapshots_for_event_mocked_stac():
         m.return_value.satellite_event_snapshot_km = 5.0
         m.return_value.satellite_event_time_windows = [{"label": "at_event", "offset_days": 0, "tolerance_days": 7}]
         m.return_value.enable_satellite_ai_analysis = True
-        m.return_value.gemini_api_key = "key"
-        m.return_value.gemini_model = "gemini-2.5-flash"
+        m.return_value.anthropic_api_key = "key"
+        m.return_value.llm_model = "claude-3-5-haiku-20241022"
     with patch("tribble.services.event_satellite.search_sentinel2_scenes", new_callable=AsyncMock) as mock_search:
         mock_search.return_value = [{
             "scene_id": "S2A_xyz",
@@ -172,7 +172,7 @@ async def test_get_snapshots_for_event_mocked_stac():
                 flood_score_ai=0.1,
                 infrastructure_damage_score_ai=0.2,
                 labels=[],
-                model="gemini",
+                model="claude-3-5-haiku-20241022",
             )
             out = await get_snapshots_for_event(
                 MagicMock(),

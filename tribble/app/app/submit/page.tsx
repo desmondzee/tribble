@@ -8,6 +8,7 @@ import { submitReport, getWeatherAtPoint, type WeatherAtPointResponse } from "@/
 import { CRISIS_CATEGORIES, HELP_CATEGORIES } from "@/lib/report-categories";
 import { useUIStore } from "@/store/uiSlice";
 import { useReportsStore } from "@/store/reportsSlice";
+import { CollapsibleFormPanel } from "@/components/CollapsibleFormPanel";
 
 const WEATHER_DEBOUNCE_MS = 600;
 
@@ -143,18 +144,11 @@ export default function SubmitPage() {
 
   return (
     <div className="pointer-events-auto p-4 max-w-lg">
-      <div className="bg-card/95 backdrop-blur-md border border-border rounded-md p-5 shadow-xl space-y-5">
-        {/* Header */}
-        <div>
-          <h2 className="font-heading text-sm tracking-widest text-foreground flex items-center gap-2">
-            <Send className="w-4 h-4 text-primary" />
-            SUBMIT REPORT
-          </h2>
-          <p className="font-mono text-[10px] text-muted-foreground mt-1">
-            Report a crisis situation. Your submission helps direct aid.
-          </p>
-        </div>
-
+      <CollapsibleFormPanel
+        title="SUBMIT REPORT"
+        subtitle="Report a crisis situation. Your submission helps direct aid."
+        icon={<Send className="w-4 h-4" />}
+      >
         {/* Location */}
         <div>
           <label className="font-mono text-[9px] tracking-wider text-muted-foreground block mb-1.5">
@@ -351,10 +345,10 @@ export default function SubmitPage() {
             </>
           )}
         </button>
-      </div>
+      </CollapsibleFormPanel>
       {myReportsCount > 0 && (
         <p className="font-body text-xs text-muted-foreground mt-4 text-center">
-          <Link href="/app/reports" className="text-primary hover:underline">
+          <Link href="/app/submissions" className="text-primary hover:underline">
             View my reports ({myReportsCount})
           </Link>
         </p>

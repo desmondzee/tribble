@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from tribble.config import get_settings
 from tribble.db import get_supabase
 from tribble.ingest.satellite_indices import compute_flood_change_scores
-from tribble.services.gemini_provider import GeminiProvider
+from tribble.services.anthropic_provider import AnthropicProvider
 from tribble.services.flock_provider import FlockProvider
 from tribble.utils.geo import haversine_km
 from tribble.services.risk_scoring import (
@@ -66,7 +66,7 @@ Respond with structured analysis. Be specific about locations and dates."""
 
 @router.post("/run")
 async def run_analysis():
-    """Read from Supabase tables, build data summary, send to Gemini for analysis."""
+    """Read from Supabase tables, build data summary, send to Claude for analysis."""
     settings = get_settings()
 
     try:
@@ -88,16 +88,16 @@ async def run_analysis():
 
     prompt = _build_analysis_prompt(events, civilian_reports, weather)
 
-    # Try Gemini first
-    gemini = GeminiProvider(
-        api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+    # Try Anthropic first
+    llm = AnthropicProvider(
+        api_key=settings.anthropic_api_key,
+        model=settings.llm_model,
     )
-    result = await gemini.generate(prompt)
+    result = await llm.generate(prompt)
 
-    # Fall back to Flock if Gemini unavailable
+    # Fall back to Flock if Claude unavailable
     if result.status != "ok" and settings.enable_flock:
-        logger.info("Gemini unavailable (%s), falling back to Flock", result.status)
+        logger.info("Claude unavailable (%s), falling back to Flock", result.status)
         flock = FlockProvider(
             api_key=settings.flock_api_key,
             base_url=settings.flock_api_base_url,
@@ -337,7 +337,7 @@ async def get_dashboard():
             "risk_level": risk_level,
             "corroboration": corroboration,
             "satellite_context": satellite_context,
-            "narrative": None,  # filled by Gemini below
+            "narrative": None,  # filled by LLM below
         })
 
     # Corridor advisories between cluster pairs within 25km
@@ -371,12 +371,12 @@ async def get_dashboard():
                 "distance_km": corridor["distance_km"],
                 "risk_level": corridor["risk_level"],
                 "hazards": corridor["hazards"],
-                "advisory": None,  # filled by Gemini below
+                "advisory": None,  # filled by LLM below
             })
 
-    # Generate Gemini narratives for high-risk zones
+    # Generate LLM narratives for high-risk zones
     high_risk_zones = [z for z in zones if z["risk_level"] in ("critical", "high")]
-    if high_risk_zones and settings.gemini_api_key:
+    if high_risk_zones and settings.anthropic_api_key:
         zone_summaries = "\n".join(
             f"- {z['location']}: risk_level={z['risk_level']}, top_risks={z['top_risks']}, "
             f"acled_events={z['corroboration']['acled_events_nearby']}, reports={z['report_count']}, "
@@ -401,8 +401,8 @@ End with a section "### Summary" containing a 2-3 sentence overall situation sum
 
 Be specific about risk types and actionable. No hedging."""
 
-        gemini = GeminiProvider(api_key=settings.gemini_api_key, model=settings.gemini_model)
-        llm_result = await gemini.generate(narrative_prompt)
+        llm = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
+        llm_result = await llm.generate(narrative_prompt)
 
         if llm_result.status == "ok" and llm_result.text:
             narrative_summary = llm_result.text
@@ -445,11 +445,11 @@ class EventSatelliteBody(BaseModel):
 async def run_event_satellite(body: EventSatelliteBody | None = None):
     """Run event-driven satellite analysis: parse event (context-driven), multi-time snapshots, aid-impact synthesis.
 
-    Body: { "event_ids": ["uuid1", "uuid2"] } to analyse events from the events table; or
-    "events_with_coords": [ { "id", "lat", "lng", "narrative" or "description", "timestamp" or "event_timestamp", ... } ]
-    to run for feed items (e.g. news) without fetching from DB. Returns per-event: parsed_event,
-    snapshots (period_label, acquisition_date, image_url, satellite_analysis), aid_impact.
-    Organisations can use snapshots to see infrastructure across different time periods.
+    Intended to be manually triggered by the user (e.g. "Run satellite analysis" on one or a few
+    events) to avoid running for all events at once. Body: "event_ids" to analyse events from the
+    events table; or "events_with_coords": [ { id, lat, lng, narrative, timestamp, ... } ] for
+    feed items. Returns per-event: parsed_event, snapshots, aid_impact. Persist stores in
+    analysis_results for later GET. Organisations can use snapshots to see infrastructure over time.
     """
     try:
         sb = get_supabase()
@@ -521,7 +521,7 @@ async def run_event_satellite(body: EventSatelliteBody | None = None):
                         "snapshots": out.get("snapshots"),
                         "synthesis": aid,
                     },
-                    "provider": "gemini",
+                    "provider": "anthropic",
                     "model": None,
                     "events_analyzed": 1,
                     "reports_analyzed": 0,
@@ -546,11 +546,12 @@ async def get_event_satellite_results(
 ):
     """Return stored event-driven satellite analysis from Supabase for the feed, Inspect, and Helios.
 
-    Use event_ids to get results for specific events (e.g. feed item ids): all snapshots and photos
-    across time intervals are in each result's snapshots array. Use in a satellite analysis bar
-    per event to show image_url, acquisition_date, period_label for before/at_event/after.
-    Only events with coordinates have satellite analysis; do not draw a 5km footprint for
-    cluster markers that have no events inside their radius.
+    Use event_ids to get results for specific events (e.g. after the user has manually triggered
+    analysis for those events). All snapshots and photos across time intervals are in each result's
+    snapshots array. Use in a satellite analysis bar per event to show image_url, acquisition_date,
+    period_label for before/at_event/after. Analysis is intended to be manually triggered by the
+    user to avoid running it for all events at once. Do not draw a 5km footprint for cluster
+    markers that have no events inside their radius.
     """
     try:
         sb = get_supabase()

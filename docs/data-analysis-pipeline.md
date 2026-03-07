@@ -38,7 +38,7 @@ Brief overview of the analysis flows and the data they use.
 - **civilian_reports** (up to 200) — report_type, severity, location_name, narrative, timestamp  
 - **weather_data** (up to 15) — date, temperature_c, humidity_pct, precipitation_mm  
 
-**Process:** Data is summarised into a prompt; Gemini (or Flock fallback) produces:
+**Process:** Data is summarised into a prompt; Claude (or Flock fallback) produces:
 
 - Situation report (2–3 paragraphs)  
 - Trend analysis  
@@ -65,7 +65,7 @@ Brief overview of the analysis flows and the data they use.
 - Impact and infrastructure notes  
 - Correlation with civilian reports  
 
-**Optional AI-derived signals:** When `enable_satellite_ai_analysis` is enabled, a vision model (e.g. Gemini) can analyse satellite preview imagery per scene. Results are cached in `satellite_ai_results` (flood_score_ai, infrastructure_damage_score_ai, labels) and **supplement** index-based fusion and risk scoring. All AI outputs are area-level hypotheses for corroboration only; no building-level claims.
+**Optional AI-derived signals:** When `enable_satellite_ai_analysis` is enabled, a vision model (e.g. Claude) can analyse satellite preview imagery per scene. Results are cached in `satellite_ai_results` (flood_score_ai, infrastructure_damage_score_ai, labels) and **supplement** index-based fusion and risk scoring. All AI outputs are area-level hypotheses for corroboration only; no building-level claims.
 
 **Stored in:** `analysis_results` (analysis_type: `satellite_analysis`).
 
@@ -110,7 +110,7 @@ All analysis outputs that are persisted go into **analysis_results** (situation_
 1. Filter events and clusters by recency (`avoid_recent_hours` query/body param).
 2. Compute **primary route** (direct A→B) risk using `compute_corridor_risk` with recency-filtered intervening events and clusters.
 3. If the direct route has high/critical risk and an event is near the segment, compute an **alternative** route via a detour waypoint away from the event.
-4. Optionally generate a short **narrative** (Gemini) summarising the suggestion.
+4. Optionally generate a short **narrative** (Claude) summarising the suggestion.
 5. Return `recent_events_nearby`, `suggested_routes` (primary + optional alternative), and `narrative`.
 
 **Response shape:** `{ recent_events_nearby: [...], suggested_routes: [{ type, summary, waypoints_or_corridor, risk_level, advisory, distance_km }], narrative }`.
@@ -129,6 +129,7 @@ All analysis outputs that are persisted go into **analysis_results** (situation_
 
 **Feed / satellite analysis bar:**
 
-- **Run analysis for feed items:** Send `POST /api/analysis/event-satellite` with `events_with_coords: [ { id, lat, lng, narrative, timestamp, ... } ]` (e.g. one or more items from `GET /api/events/news` that have `lat`/`lng`). Results are stored and keyed by that `id`.
-- **Show stored results:** Call `GET /api/analysis/event-satellite?event_ids=id1,id2,...` with the feed item ids. Each result includes `snapshots` with `image_url`, `acquisition_date`, `period_label` for before/at_event/after — use these in a **satellite analysis bar** per event to show the location over time.
-- **Map behaviour:** Only events with coordinates get satellite analysis. Do **not** draw a 5km×5km circle or square for **cluster markers that have no events inside their radius**; only show the satellite footprint (or analysis) for actual event points that have analysis.
+- **Manual trigger only:** To control cost, do **not** auto-run satellite analysis for all events on feed load. The user should **manually trigger** analysis (e.g. "Run satellite analysis" or "Analyse" on a single event, or "Analyse selected" for a few). Only then call the API for that event or selection.
+- **Run analysis (user-triggered):** When the user triggers analysis for one or more events, send `POST /api/analysis/event-satellite` with `events_with_coords: [ { id, lat, lng, narrative, timestamp, ... } ]` for those events (e.g. the selected feed item(s)). Results are stored and keyed by `id`.
+- **Show stored results:** After a run, or when the user opens an event that already has analysis, call `GET /api/analysis/event-satellite?event_ids=id1,id2,...` for that event’s id. Each result includes `snapshots` with `image_url`, `acquisition_date`, `period_label` for before/at_event/after — use these in a **satellite analysis bar** for that event to show the location over time.
+- **Map behaviour:** Only events with coordinates can have satellite analysis. Do **not** draw a 5km×5km circle or square for **cluster markers that have no events inside their radius**; only show the satellite footprint (or analysis) for actual event points that have analysis.

@@ -42,6 +42,7 @@ function saveToStorage(reports: MyReport[]) {
 interface ReportsSlice {
   myReports: MyReport[];
   addReport: (report: MyReport) => void;
+  updateReportStatus: (reportId: string, status: string) => void;
   hydrate: () => void;
 }
 
@@ -51,6 +52,16 @@ export const useReportsStore = create<ReportsSlice>((set, get) => ({
   addReport: (report) => {
     set((state) => {
       const next = [report, ...state.myReports];
+      saveToStorage(next);
+      return { myReports: next };
+    });
+  },
+
+  updateReportStatus: (reportId, status) => {
+    set((state) => {
+      const next = state.myReports.map((r) =>
+        r.report_id === reportId ? { ...r, status } : r
+      );
       saveToStorage(next);
       return { myReports: next };
     });

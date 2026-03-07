@@ -14,6 +14,7 @@ interface UISlice {
   activeConflictZoneId: string | null;
   selectedClusterId: string | null;
   locationPickMode: boolean;
+  submissionQueueMinimised: boolean;
   setSidebarExpanded: (expanded: boolean) => void;
   setFilterPanelOpen: (open: boolean) => void;
   setRightPanelOpen: (open: boolean) => void;
@@ -25,6 +26,7 @@ interface UISlice {
   setActiveConflictZoneId: (id: string | null) => void;
   setSelectedClusterId: (id: string | null) => void;
   setLocationPickMode: (on: boolean) => void;
+  setSubmissionQueueMinimised: (minimised: boolean) => void;
 }
 
 export const useUIStore = create<UISlice>((set) => ({
@@ -39,6 +41,7 @@ export const useUIStore = create<UISlice>((set) => ({
   activeConflictZoneId: null,
   selectedClusterId: null,
   locationPickMode: false,
+  submissionQueueMinimised: false,
   setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
   setFilterPanelOpen: (open) => set({ filterPanelOpen: open }),
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
@@ -50,4 +53,5 @@ export const useUIStore = create<UISlice>((set) => ({
   setActiveConflictZoneId: (id) => set({ activeConflictZoneId: id }),
   setSelectedClusterId: (id) => set({ selectedClusterId: id }),
   setLocationPickMode: (on) => set({ locationPickMode: on }),
+  setSubmissionQueueMinimised: (minimised) => set({ submissionQueueMinimised: minimised }),
 }));

@@ -34,6 +34,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/app/submissions": "SUBMISSION QUEUE",
   "/app/settings": "SETTINGS",
   "/app/submit": "SUBMIT REPORT",
+  "/app/relief": "SUBMIT RELIEF RUN",
   "/app/routes": "SAFE ROUTES",
   "/app/alerts": "ALERTS",
   "/app/analytics": "ANALYTICS",
@@ -218,7 +219,7 @@ export function TopBar() {
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              className="relative text-muted-foreground hover:text-foreground transition-colors"
+              className={`relative text-muted-foreground hover:text-foreground transition-colors ${notificationsOpen ? "z-[51]" : ""}`}
               onClick={() => setNotificationsOpen(!notificationsOpen)}
               title={
                 activeRole !== "civilian"
@@ -248,7 +249,13 @@ export function TopBar() {
                   exit={{ opacity: 0, y: -4, scale: 0.97 }}
                   transition={{ duration: 0.15 }}
                 >
-                  <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setNotificationsOpen(false)}
+                    onKeyDown={(e) => e.key === "Enter" && setNotificationsOpen(false)}
+                    className="px-3 py-2 border-b border-border flex items-center justify-between cursor-pointer hover:bg-muted/30 transition-colors"
+                  >
                     <span className="font-heading text-[11px] tracking-wider text-foreground">
                       USER SUBMISSIONS
                     </span>

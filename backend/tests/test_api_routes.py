@@ -68,9 +68,9 @@ def test_suggest_get_returns_structure():
     mock_sb = _mock_supabase_with_events_and_clusters(events, clusters)
 
     with patch("tribble.api.routes.get_supabase", return_value=mock_sb):
-        with patch("tribble.api.routes.GeminiProvider") as mock_gemini_cls:
-            mock_gemini_cls.return_value.generate = AsyncMock(
-                return_value=LLMResult(status="ok", text="Avoid the area due to recent shelling.", model="gemini", metadata={})
+        with patch("tribble.api.routes.AnthropicProvider") as mock_llm_cls:
+            mock_llm_cls.return_value.generate = AsyncMock(
+                return_value=LLMResult(status="ok", text="Avoid the area due to recent shelling.", model="claude-3-5-haiku", metadata={})
             )
             response = client.get(
                 "/api/routes/suggest",
