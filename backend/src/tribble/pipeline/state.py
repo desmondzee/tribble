@@ -44,3 +44,5 @@ class PipelineState(TypedDict):
     confidence_breakdown: dict | None
     confidence_scores: dict | None
     cluster_id: str | None
+    report_type: str | None
+    validation_context: dict | None

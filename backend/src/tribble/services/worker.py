@@ -56,6 +56,8 @@ def _build_pipeline_state(report: dict) -> dict:
         "confidence_breakdown": None,
         "confidence_scores": None,
         "cluster_id": None,
+        "report_type": None,
+        "validation_context": None,
     }
 
 

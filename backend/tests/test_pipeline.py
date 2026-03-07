@@ -22,9 +22,14 @@ def _state(**kw) -> PipelineState:
         "corroboration_hits": [],
         "weather_data": None,
         "satellite_data": None,
+        "satellite_eo_features": None,
+        "satellite_quality": None,
+        "satellite_alert": None,
         "confidence_breakdown": None,
         "confidence_scores": None,
         "cluster_id": None,
+        "report_type": None,
+        "validation_context": None,
     }
     base.update(kw)
     return base
@@ -46,3 +51,12 @@ def test_full_flow():
     assert r["status"] == PipelineStatus.PUBLISHED
     assert len(r["node_trace"]) == 11
     assert r["confidence_scores"] is not None
+
+
+def test_state_has_report_type_and_validation():
+    s = _state(
+        raw_narrative="Water station destroyed",
+        report_type="water_need",
+    )
+    assert s["report_type"] == "water_need"
+    assert s.get("validation_context") is None
