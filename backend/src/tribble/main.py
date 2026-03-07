@@ -6,6 +6,7 @@ from tribble.api.clusters import router as clusters_router
 from tribble.api.realtime import router as realtime_router
 from tribble.api.reports import router as reports_router
 from tribble.api.simulation import router as simulation_router
+from tribble.api.streaming import router as streaming_router
 from tribble.api.worker import router as worker_router
 from tribble.config import get_settings
 
@@ -15,6 +16,7 @@ app.include_router(clusters_router)
 app.include_router(assistant_router)
 app.include_router(realtime_router)
 app.include_router(simulation_router)
+app.include_router(streaming_router)
 app.include_router(worker_router)
 
 _settings = get_settings()
