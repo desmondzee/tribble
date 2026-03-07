@@ -1,8 +1,11 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
 from tribble.db import get_supabase
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/clusters", tags=["clusters"])
 
@@ -35,7 +38,7 @@ async def get_clusters(
 ):
     try:
         db = get_supabase()
-    except Exception:
+    except RuntimeError:
         raise HTTPException(503, "Database unavailable")
 
     parsed_bbox = _parse_bbox(bbox)
@@ -56,8 +59,9 @@ async def get_clusters(
 
     try:
         clusters = db.rpc("get_incident_clusters_geojson", rpc_params).execute().data or []
-    except Exception:
-        raise HTTPException(503, "Database unavailable")
+    except Exception as exc:
+        logger.error("Cluster query failed: %s", exc)
+        raise HTTPException(503, "Database query failed")
 
     features = []
     for cluster in clusters:

@@ -34,7 +34,7 @@ async def test_process_one_job_moves_status_to_completed(monkeypatch):
                 "confidence_breakdown": {"source_prior": 0.5},
             }
 
-    async def fake_persist(report_id: str, result: dict):
+    async def fake_persist(report_id: str, result: dict, started_at=None):
         captured["persist"] = (report_id, result["status"])
 
     async def fake_update(job_id: str, status: str, node_trace: list[str], error: str | None = None):

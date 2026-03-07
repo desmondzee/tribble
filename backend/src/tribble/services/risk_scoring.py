@@ -1,23 +1,13 @@
 """Risk scoring for dashboard zones and corridors."""
 
-import math
 from urllib.parse import urlencode
+
+from tribble.utils.geo import haversine_km as _haversine_km
 
 
 def classify_baseline_vegetation(ndvi: float) -> str:
     """Classify region vegetation baseline from NDVI value."""
     return "vegetated" if ndvi > 0.25 else "arid"
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    )
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _point_to_segment_distance_km(

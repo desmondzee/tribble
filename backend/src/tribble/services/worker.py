@@ -104,8 +104,9 @@ async def process_one_job(worker_id: str) -> ProcessJobResult:
             )
 
         pipeline = build_pipeline()
+        pipeline_started = datetime.now(timezone.utc)
         pipeline_result = pipeline.invoke(_build_pipeline_state(report))
-        await persist_pipeline_outputs(report_id, pipeline_result)
+        await persist_pipeline_outputs(report_id, pipeline_result, started_at=pipeline_started)
 
         node_trace = list(pipeline_result.get("node_trace") or [])
         error = pipeline_result.get("error")

@@ -8,7 +8,7 @@ router = APIRouter(prefix="/api/worker", tags=["worker"])
 
 class WorkerStartRequest(BaseModel):
     worker_id: str = "worker-1"
-    poll_interval_s: float = Field(default=0.5, gt=0.0, le=30.0)
+    poll_interval_s: float = Field(default=0.5, ge=0.1, le=30.0)
 
 
 @router.post("/start")

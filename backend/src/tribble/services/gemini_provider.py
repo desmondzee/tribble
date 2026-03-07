@@ -1,4 +1,4 @@
-import google.generativeai as genai
+from google import genai
 
 from tribble.services.llm_provider import LLMResult
 
@@ -7,15 +7,17 @@ class GeminiProvider:
     def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
         self.api_key = api_key
         self.model_name = model
+        self._client = genai.Client(api_key=api_key) if api_key.strip() else None
 
     async def generate(self, prompt: str, stream: bool = False) -> LLMResult:
-        if not self.api_key.strip():
+        if not self._client:
             return LLMResult(status="disabled", model=self.model_name)
 
         try:
-            genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel(self.model_name)
-            response = model.generate_content(prompt)
+            response = await self._client.aio.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
             return LLMResult(
                 status="ok",
                 text=response.text or "",

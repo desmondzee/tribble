@@ -16,7 +16,7 @@ async def load_report_data(report_id: str) -> dict | None:
     db = get_supabase()
     rows = (
         db.table("reports")
-        .select("id,source_type,narrative,language,event_timestamp,created_at,processing_metadata")
+        .select("id,source_type,narrative,language,event_timestamp,created_at,processing_metadata,location_id")
         .eq("id", report_id)
         .limit(1)
         .execute()
@@ -31,14 +31,34 @@ async def load_report_data(report_id: str) -> dict | None:
     if not isinstance(metadata, dict):
         metadata = {}
 
+    # Resolve coordinates from the locations table (PostGIS geometry)
+    latitude = 0.0
+    longitude = 0.0
+    location_id = report.get("location_id")
+    if location_id:
+        loc_rows = (
+            db.rpc("get_location_coords", {"p_location_id": location_id})
+            .execute()
+            .data
+            or []
+        )
+        if loc_rows:
+            latitude = float(loc_rows[0].get("lat", 0.0))
+            longitude = float(loc_rows[0].get("lng", 0.0))
+
+    # Fall back to processing_metadata if location lookup returned zeros
+    if latitude == 0.0 and longitude == 0.0:
+        latitude = float(metadata.get("latitude", 0.0))
+        longitude = float(metadata.get("longitude", 0.0))
+
     return {
         "id": str(report["id"]),
         "source_type": report.get("source_type", "web_anonymous"),
         "narrative": report.get("narrative") or "",
         "language": report.get("language") or "en",
         "event_timestamp": report.get("event_timestamp") or report.get("created_at"),
-        "latitude": float(metadata.get("latitude", 0.0)),
-        "longitude": float(metadata.get("longitude", 0.0)),
+        "latitude": latitude,
+        "longitude": longitude,
     }
 
 
@@ -50,10 +70,15 @@ def _to_verification_status(pipeline_status: PipelineStatus | str | None) -> str
     return "failed"
 
 
-async def persist_pipeline_outputs(report_id: str, pipeline_result: dict) -> None:
+async def persist_pipeline_outputs(
+    report_id: str,
+    pipeline_result: dict,
+    started_at: datetime | None = None,
+) -> None:
     db = get_supabase()
 
-    started_at = datetime.now(timezone.utc)
+    if started_at is None:
+        started_at = datetime.now(timezone.utc)
     completed_at = datetime.now(timezone.utc)
     verification_payload = {
         "report_id": report_id,

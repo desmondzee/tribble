@@ -8,6 +8,7 @@ from tribble.db import get_supabase
 from tribble.ingest.satellite_indices import compute_flood_change_scores
 from tribble.services.gemini_provider import GeminiProvider
 from tribble.services.flock_provider import FlockProvider
+from tribble.utils.geo import haversine_km
 from tribble.services.risk_scoring import (
     classify_baseline_vegetation,
     compute_corridor_risk,
@@ -153,13 +154,7 @@ def _closest_weather(scene_date: str, weather: list[dict]) -> dict | None:
     return best
 
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    import math
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+_haversine_km = haversine_km
 
 
 def _risk_level_from_profile(profile: dict) -> str:
@@ -171,6 +166,25 @@ def _risk_level_from_profile(profile: dict) -> str:
     if max_risk >= 0.3:
         return "moderate"
     return "low"
+
+
+def _assign_zone_narratives(zones: list[dict], llm_text: str) -> None:
+    """Match '### <location>' sections from LLM output to zones. Falls back to full text."""
+    import re
+    sections = re.split(r"^###\s+", llm_text, flags=re.MULTILINE)
+    location_map: dict[str, str] = {}
+    for section in sections:
+        if not section.strip():
+            continue
+        lines = section.strip().split("\n", 1)
+        heading = lines[0].strip().lower()
+        body = lines[1].strip() if len(lines) > 1 else ""
+        if body:
+            location_map[heading] = body
+
+    for zone in zones:
+        loc = (zone.get("location") or "").lower()
+        zone["narrative"] = location_map.get(loc, llm_text)
 
 
 @router.get("/dashboard")
@@ -357,9 +371,9 @@ async def get_dashboard():
         )
         narrative_prompt = f"""You are an NGO operations analyst. Write brief, actionable summaries.
 
-For each zone, write 1-2 sentences about the key risks and what NGOs should prioritize.
-For each high-risk corridor, write 1 sentence of routing advice.
-End with a 2-3 sentence overall situation summary.
+For each zone listed below, write a heading "### <location>" followed by 1-2 sentences about the key risks and what NGOs should prioritize.
+For each high-risk corridor, write 1 sentence of routing advice under "### Corridors".
+End with a section "### Summary" containing a 2-3 sentence overall situation summary.
 
 ## High-Risk Zones
 {zone_summaries}
@@ -373,9 +387,9 @@ Be specific about risk types and actionable. No hedging."""
         llm_result = await gemini.generate(narrative_prompt)
 
         if llm_result.status == "ok" and llm_result.text:
-            for z in high_risk_zones:
-                z["narrative"] = llm_result.text
             narrative_summary = llm_result.text
+            # Parse per-zone narratives from the structured LLM output
+            _assign_zone_narratives(high_risk_zones, llm_result.text)
         else:
             narrative_summary = None
     else:
