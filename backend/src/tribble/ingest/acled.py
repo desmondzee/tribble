@@ -55,9 +55,22 @@ def acled_event_to_crisis_report(event: dict) -> CrisisReport:
         processing_metadata={
             "acled_event_id": event.get("event_id_cnty"),
             "acled_event_type": event_type,
+            "acled_sub_event_type": event.get("sub_event_type"),
             "acled_fatalities": fatalities,
-            "acled_actors": [event.get("actor1"), event.get("actor2")],
+            "acled_actors": [
+                event.get("actor1"),
+                event.get("actor2"),
+                event.get("assoc_actor_1"),
+            ],
             "acled_country_iso": event.get("iso3"),
+            "acled_admin1": event.get("admin1"),
+            "acled_admin2": event.get("admin2"),
+            "acled_admin3": event.get("admin3"),
+            "acled_location_name": event.get("location"),
+            "acled_source": event.get("source"),
+            "acled_geo_precision": event.get("geo_precision"),
+            "acled_population": event.get("population_best"),
+            "acled_civilian_targeting": event.get("civilian_targeting"),
         },
     )
 
