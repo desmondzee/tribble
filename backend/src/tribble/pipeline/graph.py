@@ -182,9 +182,34 @@ def corroborate(state: PipelineState) -> dict:
 
 @_safe_node
 def enrich_weather(state: PipelineState) -> dict:
+    trace = state["node_trace"] + ["enrich_weather"]
+    raw_weather = state.get("weather_data")
+
+    if not raw_weather or not isinstance(raw_weather, dict):
+        return {"status": PipelineStatus.WEATHER_ENRICHED, "node_trace": trace, "weather_data": None}
+
+    from tribble.ingest.weather import compute_weather_risks, WeatherConditions
+
+    conditions = WeatherConditions(
+        temperature_c=float(raw_weather.get("temperature_c", 25.0)),
+        humidity_pct=float(raw_weather.get("humidity_pct", 50.0)),
+        wind_speed_ms=float(raw_weather.get("wind_speed_ms", 2.0)),
+        condition=str(raw_weather.get("condition", "Clear")),
+        precipitation_mm=float(raw_weather.get("precipitation_mm", 0.0)),
+    )
+    risks = compute_weather_risks(conditions)
+
+    enriched = {
+        **raw_weather,
+        "flood_risk": risks.flood_risk,
+        "storm_risk": risks.storm_risk,
+        "heat_risk": risks.heat_risk,
+        "route_disruption_risk": risks.route_disruption_risk,
+    }
     return {
         "status": PipelineStatus.WEATHER_ENRICHED,
-        "node_trace": state["node_trace"] + ["enrich_weather"],
+        "node_trace": trace,
+        "weather_data": enriched,
     }
 
 

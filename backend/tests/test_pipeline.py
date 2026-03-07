@@ -1,5 +1,5 @@
 from tribble.pipeline.state import PipelineState, PipelineStatus
-from tribble.pipeline.graph import build_pipeline, classify, corroborate, ACLED_CORROBORATION_MAP, compute_corroboration_score
+from tribble.pipeline.graph import build_pipeline, classify, corroborate, enrich_weather, ACLED_CORROBORATION_MAP, compute_corroboration_score
 
 
 def _state(**kw) -> PipelineState:
@@ -116,3 +116,27 @@ def test_corroborate_node_returns_hits_list():
     result = corroborate(s)
     assert isinstance(result["corroboration_hits"], list)
     assert result["status"] == PipelineStatus.CORROBORATED
+
+
+def test_enrich_weather_with_data():
+    s = _state(
+        raw_narrative="Flooding in camp area",
+        weather_data={
+            "temperature_c": 35.0,
+            "humidity_pct": 90.0,
+            "wind_speed_ms": 5.0,
+            "condition": "Rain",
+            "precipitation_mm": 45.0,
+        },
+    )
+    result = enrich_weather(s)
+    assert result["status"] == PipelineStatus.WEATHER_ENRICHED
+    assert result["weather_data"]["flood_risk"] > 0.5
+    assert "route_disruption_risk" in result["weather_data"]
+
+
+def test_enrich_weather_without_data():
+    s = _state(raw_narrative="Something happened")
+    result = enrich_weather(s)
+    assert result["status"] == PipelineStatus.WEATHER_ENRICHED
+    assert result["weather_data"] is None or result["weather_data"].get("flood_risk", 0) == 0
