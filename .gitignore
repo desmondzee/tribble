@@ -1,0 +1,38 @@
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# MCP config may contain PATs — use .cursor/mcp.example.json as template
+.cursor/mcp.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local worktrees
+.worktrees/
