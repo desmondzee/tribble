@@ -16,7 +16,7 @@ async def load_report_data(report_id: str) -> dict | None:
     db = get_supabase()
     rows = (
         db.table("reports")
-        .select("id,source_type,narrative,language,event_timestamp,created_at,processing_metadata")
+        .select("id,source_type,narrative,language,event_timestamp,created_at,processing_metadata,location_id")
         .eq("id", report_id)
         .limit(1)
         .execute()
@@ -31,14 +31,28 @@ async def load_report_data(report_id: str) -> dict | None:
     if not isinstance(metadata, dict):
         metadata = {}
 
+    # Coordinates live in locations.geom; fallback to processing_metadata
+    lat, lon = 0.0, 0.0
+    try:
+        coords_rows = db.rpc("get_location_coords", {"p_report_id": report_id}).execute().data or []
+        if coords_rows and coords_rows[0]:
+            row = coords_rows[0]
+            lat = float(row.get("latitude", 0.0))
+            lon = float(row.get("longitude", 0.0))
+    except Exception:
+        pass
+    if lat == 0.0 and lon == 0.0:
+        lat = float(metadata.get("latitude", 0.0))
+        lon = float(metadata.get("longitude", 0.0))
+
     return {
         "id": str(report["id"]),
         "source_type": report.get("source_type", "web_anonymous"),
         "narrative": report.get("narrative") or "",
         "language": report.get("language") or "en",
         "event_timestamp": report.get("event_timestamp") or report.get("created_at"),
-        "latitude": float(metadata.get("latitude", 0.0)),
-        "longitude": float(metadata.get("longitude", 0.0)),
+        "latitude": lat,
+        "longitude": lon,
     }
 
 
@@ -50,10 +64,12 @@ def _to_verification_status(pipeline_status: PipelineStatus | str | None) -> str
     return "failed"
 
 
-async def persist_pipeline_outputs(report_id: str, pipeline_result: dict) -> None:
+async def persist_pipeline_outputs(
+    report_id: str, pipeline_result: dict, started_at: datetime | None = None
+) -> None:
     db = get_supabase()
 
-    started_at = datetime.now(timezone.utc)
+    started_at = started_at or datetime.now(timezone.utc)
     completed_at = datetime.now(timezone.utc)
     verification_payload = {
         "report_id": report_id,

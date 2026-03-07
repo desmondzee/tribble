@@ -99,9 +99,10 @@ async def process_one_job(worker_id: str) -> ProcessJobResult:
                 error="report_not_found",
             )
 
+        started_at = datetime.now(timezone.utc)
         pipeline = build_pipeline()
         pipeline_result = pipeline.invoke(_build_pipeline_state(report))
-        await persist_pipeline_outputs(report_id, pipeline_result)
+        await persist_pipeline_outputs(report_id, pipeline_result, started_at)
 
         node_trace = list(pipeline_result.get("node_trace") or [])
         error = pipeline_result.get("error")
