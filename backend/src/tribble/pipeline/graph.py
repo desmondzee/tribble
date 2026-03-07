@@ -1,4 +1,5 @@
 import logging
+import math
 from functools import wraps
 from typing import Literal
 
@@ -126,10 +127,57 @@ def deduplicate(state: PipelineState) -> dict:
     return {"status": PipelineStatus.DEDUPLICATED, "node_trace": trace, "duplicates_found": []}
 
 
+ACLED_CORROBORATION_MAP: dict[str, list[str] | None] = {
+    "shelling": ["shelling"],
+    "gunfire": ["armed_conflict"],
+    "infrastructure_damage": ["shelling", "armed_conflict"],
+    "looting": ["armed_conflict"],
+    "displacement": ["armed_conflict", "shelling"],
+    "aid_blocked": ["aid_obstruction"],
+    "shelter_need": ["armed_conflict", "shelling"],
+    "missing_persons": ["armed_conflict"],
+    "medical_need": ["armed_conflict"],
+    "food_need": ["aid_obstruction", "armed_conflict"],
+}
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def compute_corroboration_score(hits: list[dict]) -> float:
+    if not hits:
+        return 0.0
+    score = 0.0
+    for h in hits:
+        dist = float(h.get("distance_km", 5.0))
+        severity = h.get("severity", "low")
+        proximity_factor = max(0.0, 1.0 - (dist / 5.0))
+        severity_weight = {"critical": 1.0, "high": 0.7, "medium": 0.4, "low": 0.2}.get(severity, 0.3)
+        score += proximity_factor * severity_weight
+    return min(score, 1.0)
+
+
 @_safe_node
 def corroborate(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["corroborate"]
-    return {"status": PipelineStatus.CORROBORATED, "node_trace": trace, "corroboration_hits": []}
+    hits = list(state.get("corroboration_hits") or [])
+    report_type = state.get("report_type") or ""
+    matching_classes = ACLED_CORROBORATION_MAP.get(report_type)
+
+    cross_source_corroboration = compute_corroboration_score(hits)
+
+    return {
+        "status": PipelineStatus.CORROBORATED,
+        "node_trace": trace,
+        "corroboration_hits": hits,
+        "corroboration_score": cross_source_corroboration,
+        "corroboration_acled_classes": matching_classes,
+    }
 
 
 @_safe_node

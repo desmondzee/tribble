@@ -1,5 +1,5 @@
 from tribble.pipeline.state import PipelineState, PipelineStatus
-from tribble.pipeline.graph import build_pipeline, classify
+from tribble.pipeline.graph import build_pipeline, classify, corroborate, ACLED_CORROBORATION_MAP, compute_corroboration_score
 
 
 def _state(**kw) -> PipelineState:
@@ -86,3 +86,33 @@ def test_classify_no_report_type_falls_back():
     s = _state(raw_narrative="Something happened")
     result = classify(s)
     assert result["classification"]["crisis_categories"] == []
+
+
+def test_acled_corroboration_map_shelling():
+    assert "shelling" in ACLED_CORROBORATION_MAP["shelling"]
+
+
+def test_acled_corroboration_map_water_need_empty():
+    assert ACLED_CORROBORATION_MAP.get("water_need") is None
+
+
+def test_compute_corroboration_score_with_hits():
+    hits = [
+        {"source": "acled", "severity": "critical", "distance_km": 1.5},
+        {"source": "acled", "severity": "high", "distance_km": 3.0},
+        {"source": "civilian_report", "distance_km": 2.0},
+    ]
+    score = compute_corroboration_score(hits)
+    assert 0.0 < score <= 1.0
+    assert score > 0.5  # multiple hits = strong corroboration
+
+
+def test_compute_corroboration_score_empty():
+    assert compute_corroboration_score([]) == 0.0
+
+
+def test_corroborate_node_returns_hits_list():
+    s = _state(raw_narrative="Shelling near market", report_type="shelling")
+    result = corroborate(s)
+    assert isinstance(result["corroboration_hits"], list)
+    assert result["status"] == PipelineStatus.CORROBORATED
