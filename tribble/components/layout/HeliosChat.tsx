@@ -10,10 +10,10 @@ interface Message {
 }
 
 const STARTERS = [
-  "Summarize the current situation",
+  "Give me an overview with action plan",
+  "Where are the hotspots and what's clustered nearby?",
   "What are the top threats right now?",
-  "Which regions are most affected?",
-  "Any patterns in recent violence?",
+  "Any escalation patterns or trends?",
 ];
 
 function MiniMarkdown({ text }: { text: string }) {

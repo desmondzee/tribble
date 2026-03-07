@@ -52,7 +52,28 @@ function rasterizeLandToGrid(fc: GeoJSON.FeatureCollection, width: number, heigh
   for (let i = 0; i < width * height; i++) {
     grid[i] = imgData.data[i * 4] > 128 ? 1 : 0;
   }
+  removeIsolatedHorizontalLines(grid, width, height);
   return grid;
+}
+
+/**
+ * Remove horizontal "stitch line" artifacts from TopoJSON (e.g. Natural Earth cut at a latitude).
+ * Any row that has land but has no land in the row above or below is treated as artifact and cleared.
+ */
+function removeIsolatedHorizontalLines(grid: Uint8Array, width: number, height: number): void {
+  const landCount = (y: number) => {
+    let n = 0;
+    for (let x = 0; x < width; x++) n += grid[y * width + x];
+    return n;
+  };
+  for (let y = 1; y < height - 1; y++) {
+    const above = landCount(y - 1);
+    const curr = landCount(y);
+    const below = landCount(y + 1);
+    if (curr > 0 && above === 0 && below === 0) {
+      for (let x = 0; x < width; x++) grid[y * width + x] = 0;
+    }
+  }
 }
 
 /** Sample raster at lon [-180,180], lat [-90,90]. Returns 1 if land. */

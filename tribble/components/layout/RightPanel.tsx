@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Newspaper, Bot, Radio, Target, MapPin } from "lucide-react";
 import { spring } from "@/lib/animation-tokens";
 import { useUIStore } from "@/store/uiSlice";
 import { useData } from "@/context/DataContext";
+import { useReportsStore } from "@/store/reportsSlice";
+import type { NewsEvent } from "@/lib/api";
 import { ClusterInspectPanel } from "./ClusterInspectPanel";
 import { HeliosChat } from "./HeliosChat";
 
@@ -41,8 +43,24 @@ function flyToEvent(lat: number | null, lng: number | null) {
 
 function NewsFeed() {
   const { newsEvents, events } = useData();
+  const myReports = useReportsStore((s) => s.myReports);
   const { selectedEventId, selectedNewsEventId } = useUIStore();
   const selectedNewsRef = useRef<HTMLButtonElement | null>(null);
+
+  const feedItems: NewsEvent[] = useMemo(() => {
+    const myReportItems: NewsEvent[] = myReports.map((r) => ({
+      id: `my-${r.report_id}`,
+      headline: r.narrative.length > 80 ? r.narrative.slice(0, 77) + "…" : r.narrative,
+      source: "My report",
+      severity: (r.crisis_categories.length ? "medium" : "low") as "critical" | "high" | "medium" | "low",
+      timestamp: r.submitted_at,
+      lat: r.lat,
+      lng: r.lng,
+      country: null,
+      event_type: r.crisis_categories[0] ?? null,
+    }));
+    return [...myReportItems, ...newsEvents];
+  }, [myReports, newsEvents]);
 
   useEffect(() => {
     if (selectedNewsEventId && selectedNewsRef.current) {
@@ -54,10 +72,10 @@ function NewsFeed() {
     ? events.find((e) => e.id === selectedEventId)
     : null;
   const selectedNewsEvent = selectedNewsEventId
-    ? newsEvents.find((e) => e.id === selectedNewsEventId)
+    ? feedItems.find((e) => e.id === selectedNewsEventId)
     : null;
 
-  if (newsEvents.length === 0) {
+  if (feedItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <Radio className="w-6 h-6 text-muted-foreground mb-3 animate-pulse" />
@@ -79,7 +97,7 @@ function NewsFeed() {
           LIVE FEED
         </span>
         <span className="font-mono text-[9px] text-muted-foreground ml-auto">
-          {newsEvents.length} events
+          {feedItems.length} events
         </span>
       </div>
 
@@ -115,7 +133,7 @@ function NewsFeed() {
         </div>
       )}
 
-      {newsEvents.map((evt) => (
+      {feedItems.map((evt) => (
         <button
           key={evt.id}
           ref={evt.id === selectedNewsEventId ? selectedNewsRef : undefined}

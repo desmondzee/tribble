@@ -11,6 +11,7 @@ import {
 import { getClusters, getNewsEvents, type GeoJSONFeatureCollection, type NewsEvent } from "@/lib/api";
 import { fetchGeolocationGeoJSON } from "@/lib/geolocation-api";
 import { MOCK_CLUSTERS } from "@/data/mapData";
+import { getPlaceholderFeedNews } from "@/lib/feed-placeholder";
 import {
   PLACEHOLDER_EVENTS,
   PLACEHOLDER_DRONES,
@@ -128,7 +129,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     type: "FeatureCollection",
     features: [],
   });
-  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
+  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>(() => getPlaceholderFeedNews());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
 
@@ -146,9 +147,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const tryFetchNews = useCallback(async () => {
     try {
       const items = await getNewsEvents({ limit: 50, country_iso: "SSD" });
-      setNewsEvents(items);
+      setNewsEvents(items.length > 0 ? items : getPlaceholderFeedNews());
     } catch {
-      // Keep existing news
+      setNewsEvents(getPlaceholderFeedNews());
     }
   }, []);
 
