@@ -45,7 +45,7 @@ def _to_state(report) -> PipelineState:
 def test_dummy_report_e2e():
     result = build_pipeline().invoke(_to_state(generate_dummy_reports(1)[0]))
     assert result["status"] == PipelineStatus.PUBLISHED
-    assert len(result["node_trace"]) == 11
+    assert len(result["node_trace"]) == 14
 
 
 def test_acled_event_e2e():

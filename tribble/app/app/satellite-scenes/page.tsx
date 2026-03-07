@@ -2,16 +2,12 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Calendar, ImageIcon, Cloud, ExternalLink } from "lucide-react";
-import { getSatelliteScenes, type SatelliteScene } from "@/lib/api";
-
-const MAY_2024_INTERVALS: { label: string; dateFrom: string; dateTo: string }[] = [
-  { label: "May 1–5", dateFrom: "2024-05-01", dateTo: "2024-05-05" },
-  { label: "May 6–10", dateFrom: "2024-05-06", dateTo: "2024-05-10" },
-  { label: "May 11–15", dateFrom: "2024-05-11", dateTo: "2024-05-15" },
-  { label: "May 16–20", dateFrom: "2024-05-16", dateTo: "2024-05-20" },
-  { label: "May 21–25", dateFrom: "2024-05-21", dateTo: "2024-05-25" },
-  { label: "May 26–31", dateFrom: "2024-05-26", dateTo: "2024-05-31" },
-];
+import {
+  getSatelliteScenes,
+  getSatelliteScenesIntervals,
+  type SatelliteScene,
+  type SatelliteSceneInterval,
+} from "@/lib/api";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -24,8 +20,26 @@ function formatDate(iso: string | null): string {
 }
 
 function SceneRow({ scene }: { scene: SatelliteScene }) {
+  const [imgError, setImgError] = useState(false);
+  const showThumb = scene.tile_url && !imgError;
   return (
-    <div className="border-b border-border/60 py-2 px-3 flex items-center justify-between gap-3">
+    <div className="border-b border-border/60 py-2 px-3 flex items-center gap-3">
+      {showThumb && scene.tile_url && (
+        <a
+          href={scene.tile_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-shrink-0 w-14 h-14 rounded overflow-hidden border border-border bg-muted"
+          title="Open full image"
+        >
+          <img
+            src={scene.tile_url}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        </a>
+      )}
       <div className="min-w-0 flex-1">
         <p className="font-mono text-[11px] text-foreground truncate" title={scene.scene_id}>
           {scene.scene_id}
@@ -55,19 +69,48 @@ function SceneRow({ scene }: { scene: SatelliteScene }) {
 }
 
 export default function SatelliteScenesPage() {
-  const [selectedInterval, setSelectedInterval] = useState<(typeof MAY_2024_INTERVALS)[0] | null>(
-    MAY_2024_INTERVALS[0]
-  );
+  const [intervals, setIntervals] = useState<SatelliteSceneInterval[]>([]);
+  const [intervalsRange, setIntervalsRange] = useState<{ min_date: string | null; max_date: string | null }>({
+    min_date: null,
+    max_date: null,
+  });
+  const [intervalsLoading, setIntervalsLoading] = useState(true);
+  const [intervalsError, setIntervalsError] = useState<string | null>(null);
+  const [selectedInterval, setSelectedInterval] = useState<SatelliteSceneInterval | null>(null);
   const [scenes, setScenes] = useState<SatelliteScene[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchScenes = useCallback(async (interval: (typeof MAY_2024_INTERVALS)[0]) => {
-    setSelectedInterval(interval);
+  useEffect(() => {
+    let cancelled = false;
+    setIntervalsLoading(true);
+    setIntervalsError(null);
+    getSatelliteScenesIntervals()
+      .then((data) => {
+        if (cancelled) return;
+        setIntervals(data.intervals);
+        setIntervalsRange({ min_date: data.min_date, max_date: data.max_date });
+        if (data.intervals.length > 0) setSelectedInterval(data.intervals[0]);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setIntervalsError(e instanceof Error ? e.message : "Failed to load intervals");
+          setIntervals([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIntervalsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fetchScenes = useCallback(async (interval: SatelliteSceneInterval) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getSatelliteScenes(interval.dateFrom, interval.dateTo);
+      const data = await getSatelliteScenes(interval.date_from, interval.date_to);
       setScenes(data.scenes);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load scenes");
@@ -77,14 +120,12 @@ export default function SatelliteScenesPage() {
     }
   }, []);
 
-  // Load first interval on mount
   useEffect(() => {
-    if (MAY_2024_INTERVALS[0]) fetchScenes(MAY_2024_INTERVALS[0]);
-  }, [fetchScenes]);
+    if (selectedInterval) fetchScenes(selectedInterval);
+  }, [selectedInterval?.date_from, selectedInterval?.date_to, fetchScenes]);
 
   return (
     <div className="pointer-events-auto flex h-full">
-      {/* Sidebar: May 2024, 5-day intervals */}
       <aside className="w-56 flex-shrink-0 border-r border-border bg-card/50 flex flex-col">
         <div className="p-3 border-b border-border">
           <h2 className="font-heading text-xs tracking-wider text-foreground flex items-center gap-2">
@@ -93,17 +134,30 @@ export default function SatelliteScenesPage() {
           </h2>
           <p className="font-mono text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
             <Calendar className="w-3 h-3" />
-            May 2024 (5-day intervals)
+            {intervalsRange.min_date && intervalsRange.max_date
+              ? `${intervalsRange.min_date} – ${intervalsRange.max_date} (5-day intervals)`
+              : "Intervals from open data"}
           </p>
         </div>
+        {intervalsLoading && (
+          <p className="p-3 font-mono text-[10px] text-muted-foreground">Loading…</p>
+        )}
+        {intervalsError && (
+          <p className="p-3 font-body text-xs text-destructive">{intervalsError}</p>
+        )}
+        {!intervalsLoading && intervals.length === 0 && !intervalsError && (
+          <p className="p-3 font-body text-xs text-muted-foreground">
+            No satellite data in database. Run the backend seed to populate scenes from Sentinel-2 (Planetary Computer).
+          </p>
+        )}
         <nav className="flex-1 overflow-auto py-2">
-          {MAY_2024_INTERVALS.map((interval) => (
+          {intervals.map((interval) => (
             <button
-              key={interval.dateFrom}
+              key={interval.date_from}
               type="button"
-              onClick={() => fetchScenes(interval)}
+              onClick={() => setSelectedInterval(interval)}
               className={`w-full text-left px-3 py-2 font-mono text-[11px] transition-colors ${
-                selectedInterval?.dateFrom === interval.dateFrom
+                selectedInterval?.date_from === interval.date_from
                   ? "bg-primary/15 text-primary border-l-2 border-primary"
                   : "text-muted-foreground hover:text-foreground hover:bg-card border-l-2 border-transparent"
               }`}
@@ -114,17 +168,16 @@ export default function SatelliteScenesPage() {
         </nav>
       </aside>
 
-      {/* Main: scene list for selected interval */}
       <main className="flex-1 overflow-auto p-4">
         {!selectedInterval ? (
           <p className="font-body text-sm text-muted-foreground">
-            Select an interval from the sidebar.
+            {intervals.length === 0 ? "Load intervals from the database first." : "Select an interval from the sidebar."}
           </p>
         ) : (
           <>
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-heading text-sm tracking-wider text-foreground">
-                {selectedInterval.label} 2024
+                {selectedInterval.label}
               </h3>
               {loading && (
                 <span className="font-mono text-[10px] text-muted-foreground">Loading…</span>
@@ -135,7 +188,7 @@ export default function SatelliteScenesPage() {
             )}
             {!loading && !error && scenes.length === 0 && (
               <p className="font-body text-sm text-muted-foreground">
-                No satellite scenes in this period. Run the backend seed to populate May 2024 data.
+                No satellite scenes in this period.
               </p>
             )}
             {!loading && scenes.length > 0 && (

@@ -164,7 +164,7 @@ function NewsFeed() {
                   </span>
                 )}
                 {evt.lat != null && evt.lng != null && (
-                  <MapPin className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" title="On map" />
+                  <MapPin className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" />
                 )}
               </div>
               <p className="text-[11px] text-foreground/90 leading-tight line-clamp-2 group-hover:text-foreground">

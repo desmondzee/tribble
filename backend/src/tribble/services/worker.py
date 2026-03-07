@@ -60,6 +60,7 @@ def _build_pipeline_state(report: dict) -> dict:
         "validation_context": None,
         "corroboration_score": None,
         "corroboration_acled_classes": None,
+        "llm_verification": None,
     }
 
 

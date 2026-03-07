@@ -48,3 +48,4 @@ class PipelineState(TypedDict):
     validation_context: dict | None
     corroboration_score: float | None
     corroboration_acled_classes: list[str] | None
+    llm_verification: dict | None

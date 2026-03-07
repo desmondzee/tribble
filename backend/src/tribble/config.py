@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     discord_webhook_url: str = ""
     open_meteo_base_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
 
 
 @lru_cache

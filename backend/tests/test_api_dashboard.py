@@ -99,3 +99,46 @@ def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
     assert "risk_profile" in zone
     assert "satellite_context" in zone
     assert "viewer_url" in zone["satellite_context"]
+
+
+@patch("tribble.api.satellite.get_supabase")
+def test_satellite_scenes_intervals_empty(mock_get_sb):
+    sb = MagicMock()
+    table = MagicMock()
+    table.select.return_value = table
+    table.order.return_value = table
+    table.execute.return_value = MagicMock(data=[])
+    sb.table.return_value = table
+    mock_get_sb.return_value = sb
+
+    response = client.get("/api/satellite/scenes/intervals")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["min_date"] is None
+    assert data["max_date"] is None
+    assert data["intervals"] == []
+
+
+@patch("tribble.api.satellite.get_supabase")
+def test_satellite_scenes_intervals_from_data(mock_get_sb):
+    sb = MagicMock()
+    table = MagicMock()
+    table.select.return_value = table
+    table.order.return_value = table
+    table.execute.return_value = MagicMock(
+        data=[
+            {"acquisition_date": "2024-05-03T10:00:00Z"},
+            {"acquisition_date": "2024-05-08T10:00:00Z"},
+            {"acquisition_date": "2024-05-15T10:00:00Z"},
+        ]
+    )
+    sb.table.return_value = table
+    mock_get_sb.return_value = sb
+
+    response = client.get("/api/satellite/scenes/intervals")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["min_date"] == "2024-05-03"
+    assert data["max_date"] == "2024-05-15"
+    assert len(data["intervals"]) >= 1
+    assert all("label" in i and "date_from" in i and "date_to" in i for i in data["intervals"])

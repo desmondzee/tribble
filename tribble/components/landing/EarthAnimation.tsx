@@ -234,7 +234,7 @@ export function EarthAnimation({ scrollY = 0 }: { scrollY?: number }) {
     // Fetch countries and build voxels with real land data (deferred so sphere flies in first)
     fetch("/data/countries-110m.json")
       .then((res) => res.json())
-      .then((topology: { objects: { countries?: unknown } }) => {
+      .then((topology: { objects: { land?: unknown; countries?: unknown } }) => {
         if (cancelled) return;
         const landOrCountries = topology.objects.land ?? topology.objects.countries;
         const countries = topojson.feature(

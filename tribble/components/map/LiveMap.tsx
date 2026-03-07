@@ -225,7 +225,7 @@ export default function LiveMap() {
       }
       const map = mapRef.current;
       if (!map || !layers.events) return;
-      const features = map.queryRenderedFeatures(e.point, {
+      const features = map.queryRenderedFeatures([e.point.x, e.point.y], {
         layers: ["event-circles-layer"],
       });
       if (features.length === 0) return;

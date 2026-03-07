@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { MapPin, Send, Crosshair, Check, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { MapPin, Send, Crosshair, Check, Loader2, Cloud } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { submitReport } from "@/lib/api";
+import { submitReport, getWeatherAtPoint, type WeatherAtPointResponse } from "@/lib/api";
 import { CRISIS_CATEGORIES, HELP_CATEGORIES } from "@/lib/report-categories";
 import { useUIStore } from "@/store/uiSlice";
 import { useReportsStore } from "@/store/reportsSlice";
+
+const WEATHER_DEBOUNCE_MS = 600;
 
 export default function SubmitPage() {
   const { setLocationPickMode } = useUIStore();
@@ -23,6 +25,10 @@ export default function SubmitPage() {
   const [helpCategories, setHelpCategories] = useState<Set<string>>(new Set());
   const [anonymous, setAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [weatherAtPoint, setWeatherAtPoint] = useState<WeatherAtPointResponse | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const weatherDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleCrisis = (key: string) => {
     setCrisisCategories((prev) => {
@@ -55,6 +61,37 @@ export default function SubmitPage() {
     return () =>
       window.removeEventListener("hip:locationPicked", handleLocationPicked);
   }, [handleLocationPicked]);
+
+  // Debounced weather-at-point fetch when lat/lng are set
+  useEffect(() => {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    const valid = lat.trim() !== "" && lng.trim() !== "" && !Number.isNaN(latNum) && !Number.isNaN(lngNum);
+    if (!valid) {
+      setWeatherAtPoint(null);
+      setWeatherError(null);
+      return;
+    }
+    if (weatherDebounceRef.current) clearTimeout(weatherDebounceRef.current);
+    weatherDebounceRef.current = setTimeout(() => {
+      weatherDebounceRef.current = null;
+      setWeatherLoading(true);
+      setWeatherError(null);
+      getWeatherAtPoint({ lat: latNum, lng: lngNum })
+        .then((data) => {
+          setWeatherAtPoint(data);
+          setWeatherError(null);
+        })
+        .catch((err) => {
+          setWeatherAtPoint(null);
+          setWeatherError(err instanceof Error ? err.message : "Failed to load weather");
+        })
+        .finally(() => setWeatherLoading(false));
+    }, WEATHER_DEBOUNCE_MS);
+    return () => {
+      if (weatherDebounceRef.current) clearTimeout(weatherDebounceRef.current);
+    };
+  }, [lat, lng]);
 
   const canSubmit =
     lat &&
@@ -163,6 +200,38 @@ export default function SubmitPage() {
             </div>
           )}
         </div>
+
+        {/* Weather at location (pre-submit validity) */}
+        {(weatherLoading || weatherAtPoint || weatherError) && (
+          <div className="rounded-sm border border-border bg-muted/30 p-3">
+            <div className="flex items-center gap-2 font-mono text-[9px] tracking-wider text-muted-foreground mb-1.5">
+              <Cloud className="w-3.5 h-3.5" />
+              WEATHER AT LOCATION
+            </div>
+            {weatherLoading && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span className="font-mono text-[10px]">Loading…</span>
+              </div>
+            )}
+            {weatherError && (
+              <p className="font-mono text-[10px] text-muted-foreground">
+                {weatherError}
+              </p>
+            )}
+            {weatherAtPoint && !weatherLoading && (
+              <>
+                <p className="font-body text-[11px] text-foreground">
+                  {weatherAtPoint.condition}, {Math.round(weatherAtPoint.temperature_c)}°C
+                  {weatherAtPoint.precipitation_mm > 0 && `, ${weatherAtPoint.precipitation_mm} mm precip`}
+                </p>
+                <p className="font-mono text-[10px] text-primary mt-1">
+                  {weatherAtPoint.validity_hint}
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Narrative */}
         <div>

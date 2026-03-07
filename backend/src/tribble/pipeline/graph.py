@@ -4,6 +4,7 @@ from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
+from tribble.config import get_settings
 from tribble.models.confidence import ConfidenceBreakdown, SOURCE_PRIORS, compute_access_difficulty
 from tribble.pipeline.state import PipelineState, PipelineStatus
 from tribble.services.satellite_fusion import fuse_satellite_weather_report_signals
@@ -79,6 +80,86 @@ REPORT_TYPE_CATEGORIES: dict[str, list[str]] = {
     "looting": ["security", "food"],
     "missing_persons": ["security"],
 }
+
+REPORT_TYPE_KEYWORDS: list[tuple[list[str], str]] = [
+    (["shelling", "shelled", "artillery", "bombardment"], "shelling"),
+    (["gunfire", "shooting", "gun shot"], "gunfire"),
+    (["water shortage", "no water", "water station", "water supply", "running out of water"], "water_need"),
+    (["food shortage", "no food", "hunger", "starving", "food distribution"], "food_need"),
+    (["medical", "hospital", "injured", "medicine", "doctor"], "medical_need"),
+    (["shelter", "displaced", "fleeing", "refugee camp"], "shelter_need"),
+    (["displacement", "fled", "fleeing", "evacuat"], "displacement"),
+    (["bridge", "destroyed", "damage", "infrastructure", "building collapsed"], "infrastructure_damage"),
+    (["aid blocked", "convoy", "humanitarian access", "blocked"], "aid_blocked"),
+    (["looting", "looted", "stolen"], "looting"),
+    (["missing person", "missing people", "abducted"], "missing_persons"),
+]
+
+
+def _keyword_report_type(narrative: str) -> str | None:
+    """Fallback when FLock is disabled: match narrative keywords to report_type."""
+    text = (narrative or "").lower()
+    for keywords, report_type in REPORT_TYPE_KEYWORDS:
+        if any(k in text for k in keywords):
+            return report_type
+    return None
+
+
+@_safe_node
+def verify_extract(state: PipelineState) -> dict:
+    """Extract report_type from narrative via FLock (if enabled) or keyword fallback."""
+    import asyncio
+
+    trace = state["node_trace"] + ["verify_extract"]
+    narrative = (state.get("raw_narrative") or "").strip()
+    norm = state.get("normalized") or {}
+    narrative = str(norm.get("narrative_clean") or narrative)
+    report_type_val: str | None = None
+    provider_used = "keyword_fallback"
+    plausibility = "ok"
+
+    if get_settings().enable_flock and (get_settings().flock_api_key or "").strip():
+        prompt = (
+            "Given this crisis report narrative, choose exactly one report_type from this list: "
+            "shelling, gunfire, food_need, water_need, medical_need, shelter_need, displacement, "
+            "infrastructure_damage, aid_blocked, looting, missing_persons. "
+            "Reply with only that one word, nothing else. If the report does not match any type, reply: unknown."
+        )
+        prompt += f"\n\nNarrative: {narrative[:1500]}"
+        try:
+            from tribble.services.flock_provider import FlockProvider
+
+            settings = get_settings()
+            flock = FlockProvider(
+                api_key=settings.flock_api_key,
+                base_url=settings.flock_api_base_url,
+                model=settings.flock_model,
+            )
+            result = asyncio.run(flock.generate(prompt))
+            if result.status == "ok" and result.text:
+                raw = result.text.strip().lower().split()
+                for word in raw:
+                    if word in REPORT_TYPE_CATEGORIES:
+                        report_type_val = word
+                        provider_used = "flock"
+                        break
+        except Exception:
+            pass
+
+    if report_type_val is None:
+        report_type_val = _keyword_report_type(narrative)
+
+    llm_verification: dict = {
+        "report_type": report_type_val,
+        "plausibility": plausibility,
+        "provider": provider_used,
+    }
+    return {
+        "node_trace": trace,
+        "report_type": report_type_val,
+        "llm_verification": llm_verification,
+    }
+
 
 SEVERITY_URGENCY: dict[str, str] = {
     "critical": "critical",
@@ -179,6 +260,26 @@ def corroborate(state: PipelineState) -> dict:
 
 
 @_safe_node
+def fetch_weather(state: PipelineState) -> dict:
+    """Populate weather_data for report location (and optional date) via Open-Meteo."""
+    trace = state["node_trace"] + ["fetch_weather"]
+    lat = state.get("latitude", 0.0)
+    lon = state.get("longitude", 0.0)
+    timestamp = state.get("timestamp") or ""
+    date_str: str | None = None
+    if timestamp:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+    from tribble.ingest.weather import fetch_weather_for_pipeline
+    raw_weather = fetch_weather_for_pipeline(lat=lat, lon=lon, date_str=date_str)
+    return {"node_trace": trace, "weather_data": raw_weather}
+
+
+@_safe_node
 def enrich_weather(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["enrich_weather"]
     raw_weather = state.get("weather_data")
@@ -209,6 +310,26 @@ def enrich_weather(state: PipelineState) -> dict:
         "node_trace": trace,
         "weather_data": enriched,
     }
+
+
+@_safe_node
+def fetch_satellite(state: PipelineState) -> dict:
+    """Populate satellite_eo_features and satellite_quality for report location via STAC."""
+    trace = state["node_trace"] + ["fetch_satellite"]
+    lat = state.get("latitude", 0.0)
+    lon = state.get("longitude", 0.0)
+    timestamp = state.get("timestamp") or ""
+    date_str: str | None = None
+    if timestamp:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            date_str = dt.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+    from tribble.ingest.satellite import fetch_satellite_for_pipeline
+    eo_features, quality = fetch_satellite_for_pipeline(lat=lat, lon=lon, date_str=date_str)
+    return {"node_trace": trace, "satellite_eo_features": eo_features, "satellite_quality": quality}
 
 
 @_safe_node
@@ -266,6 +387,11 @@ def _build_validation_context(state: PipelineState) -> dict:
     corr_classes = state.get("corroboration_acled_classes")
 
     context: dict = {}
+
+    # LLM verification (FLock or keyword fallback)
+    llm_verification = state.get("llm_verification")
+    if llm_verification is not None:
+        context["llm_verification"] = llm_verification
 
     # Satellite validation
     sat_rule = SATELLITE_VALIDATION.get(report_type)
@@ -423,11 +549,14 @@ def build_pipeline():
         ("prefilter", prefilter),
         ("normalize", normalize),
         ("translate", translate),
+        ("verify_extract", verify_extract),
         ("classify", classify),
         ("geocode", geocode),
         ("deduplicate", deduplicate),
         ("corroborate", corroborate),
+        ("fetch_weather", fetch_weather),
         ("enrich_weather", enrich_weather),
+        ("fetch_satellite", fetch_satellite),
         ("enrich_satellite", enrich_satellite),
         ("score", score),
         ("cluster", cluster_node),
@@ -437,12 +566,15 @@ def build_pipeline():
     g.add_conditional_edges("prefilter", _route_prefilter)
     for a, b in [
         ("normalize", "translate"),
-        ("translate", "classify"),
+        ("translate", "verify_extract"),
+        ("verify_extract", "classify"),
         ("classify", "geocode"),
         ("geocode", "deduplicate"),
         ("deduplicate", "corroborate"),
-        ("corroborate", "enrich_weather"),
-        ("enrich_weather", "enrich_satellite"),
+        ("corroborate", "fetch_weather"),
+        ("fetch_weather", "enrich_weather"),
+        ("enrich_weather", "fetch_satellite"),
+        ("fetch_satellite", "enrich_satellite"),
         ("enrich_satellite", "score"),
         ("score", "cluster"),
     ]:

@@ -108,6 +108,71 @@ export async function submitReport(data: ReportSubmission): Promise<ReportRespon
   return res.json();
 }
 
+// ── Weather at point (pre-submit validity) ───────────────────────────────────
+
+export interface WeatherAtPointResponse {
+  temperature_c: number;
+  humidity_pct: number;
+  wind_speed_ms: number;
+  condition: string;
+  precipitation_mm: number;
+  risks: {
+    flood_risk: number;
+    storm_risk: number;
+    heat_risk: number;
+    route_disruption_risk: number;
+  };
+  validity_hint: string;
+}
+
+export async function getWeatherAtPoint(params: {
+  lat: number;
+  lng: number;
+  date?: string;
+}): Promise<WeatherAtPointResponse> {
+  const sp = new URLSearchParams({
+    lat: String(params.lat),
+    lon: String(params.lng),
+  });
+  if (params.date) sp.set("date", params.date);
+  const url = `${apiUrl("/api/weather/at-point")}?${sp}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/weather/at-point returned ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Report validation (post-submit validity) ─────────────────────────────────
+
+export interface ValidationSource {
+  confirmed: boolean;
+  signal: string;
+  confidence: number;
+}
+
+export interface ReportValidationResponse {
+  confidence_scores: { publishability: number; urgency: number; access_difficulty: number };
+  validation_context: {
+    weather?: ValidationSource;
+    satellite?: ValidationSource;
+    acled?: ValidationSource;
+    llm_verification?: unknown;
+  };
+  breakdown?: Record<string, unknown>;
+}
+
+export async function getReportValidation(reportId: string): Promise<ReportValidationResponse> {
+  const url = apiUrl(`/api/reports/${reportId}/validation`);
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/reports/${reportId}/validation returned ${res.status}`);
+  }
+  return res.json();
+}
+
 /**
  * Fetch ACLED events as news items for the live feed.
  */
@@ -152,6 +217,25 @@ export interface SatelliteScene {
   ndwi: number | null;
   lat: number;
   lng: number;
+}
+
+export interface SatelliteSceneInterval {
+  label: string;
+  date_from: string;
+  date_to: string;
+}
+
+export interface SatelliteScenesIntervalsResponse {
+  min_date: string | null;
+  max_date: string | null;
+  intervals: SatelliteSceneInterval[];
+}
+
+export async function getSatelliteScenesIntervals(): Promise<SatelliteScenesIntervalsResponse> {
+  const url = apiUrl("/api/satellite/scenes/intervals");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`API /api/satellite/scenes/intervals returned ${res.status}`);
+  return res.json();
 }
 
 export interface SatelliteScenesResponse {

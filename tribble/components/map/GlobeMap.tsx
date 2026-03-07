@@ -95,7 +95,7 @@ function hipEventToIncident(e: HipEvent): Incident {
   };
 }
 
-function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
+function latLngToVector3(lat: number, lng: number, radius: number) {
   const phi = ((90 - lat) * Math.PI) / 180;
   const theta = ((lng + 180) * Math.PI) / 180;
   return new THREE.Vector3(
@@ -255,7 +255,7 @@ export function GlobeMap() {
     group.add(stars);
     scene.add(group);
 
-    const hitTargets: THREE.Mesh[] = [];
+    const hitTargets: InstanceType<typeof THREE.Mesh>[] = [];
     const hitTargetData: Array<{ type: "event"; incident: Incident } | { type: "drone"; drone: Drone }> = [];
 
     const visibleEvents = PLACEHOLDER_EVENTS.filter((e) =>
@@ -295,7 +295,7 @@ export function GlobeMap() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(hitTargets);
       if (intersects.length > 0) {
-        const idx = hitTargets.indexOf(intersects[0].object as THREE.Mesh);
+        const idx = hitTargets.indexOf(intersects[0].object as InstanceType<typeof THREE.Mesh>);
         const data = hitTargetData[idx];
         if (data?.type === "event") {
           setHoveredIncident({
@@ -319,7 +319,7 @@ export function GlobeMap() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(hitTargets);
       if (intersects.length > 0) {
-        const idx = hitTargets.indexOf(intersects[0].object as THREE.Mesh);
+        const idx = hitTargets.indexOf(intersects[0].object as InstanceType<typeof THREE.Mesh>);
         const data = hitTargetData[idx];
         if (data?.type === "event") {
           setSelectedEventId(data.incident.id);
