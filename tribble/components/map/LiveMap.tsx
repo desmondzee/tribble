@@ -119,11 +119,18 @@ const BOUNDARIES_LINE_PAINT = {
   "line-dasharray": [4, 3],
 };
 
-const DEFAULT_VIEW = { longitude: 30, latitude: 15, zoom: 4 };
+const DEFAULT_VIEW = { longitude: 30.5, latitude: 7.0, zoom: 5.5 };
 
 export default function LiveMap() {
   const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents } = useData();
-  const { setSelectedEventId, setRightPanelOpen, setRightPanelTab } = useUIStore();
+  const {
+    setSelectedEventId,
+    setRightPanelOpen,
+    setRightPanelTab,
+    setSelectedClusterId,
+    locationPickMode,
+    setLocationPickMode,
+  } = useUIStore();
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     clusters: true,
@@ -287,9 +294,20 @@ export default function LiveMap() {
         {...viewState}
         onMove={(e) => setViewState(e.viewState)}
         onLoad={handleMapLoad}
+        onClick={(e) => {
+          if (locationPickMode) {
+            window.dispatchEvent(
+              new CustomEvent("hip:locationPicked", {
+                detail: { lat: e.lngLat.lat, lng: e.lngLat.lng },
+              })
+            );
+            setLocationPickMode(false);
+          }
+        }}
         mapboxAccessToken={TOKEN}
         mapStyle={MAP_STYLES[mapMode]}
         style={{ width: "100%", height: "100%" }}
+        cursor={locationPickMode ? "crosshair" : undefined}
         attributionControl={false}
       >
         <NavigationControl position="top-right" showCompass={false} />
@@ -409,6 +427,13 @@ export default function LiveMap() {
                     report_count: f.properties?.report_count,
                     weighted_severity: f.properties?.weighted_severity,
                     top_need_categories: f.properties?.top_need_categories,
+                  }}
+                  onClick={() => {
+                    if (f.properties?.id) {
+                      setSelectedClusterId(f.properties.id);
+                      setRightPanelOpen(true);
+                      setRightPanelTab("cluster_inspect");
+                    }
                   }}
                 />
               </Marker>

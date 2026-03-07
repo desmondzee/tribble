@@ -21,9 +21,10 @@ export interface ClusterMarkerProps {
     weighted_severity?: number;
     top_need_categories?: string[];
   };
+  onClick?: () => void;
 }
 
-export default function ClusterMarker({ cluster }: ClusterMarkerProps) {
+export default function ClusterMarker({ cluster, onClick }: ClusterMarkerProps) {
   const level = getSeverityLevel(cluster.weighted_severity);
   const color = SEVERITY_COLOR[level] ?? SEVERITY_COLOR.low;
   const categories = cluster.top_need_categories?.join(", ") ?? "";
@@ -33,6 +34,8 @@ export default function ClusterMarker({ cluster }: ClusterMarkerProps) {
     <div
       className={`cluster-map-marker ${level}`}
       title={title}
+      onClick={onClick}
+      style={onClick ? { cursor: "pointer" } : undefined}
     >
       <div className="cluster-map-ring" style={{ borderColor: color }} />
       <div

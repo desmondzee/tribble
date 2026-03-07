@@ -8,7 +8,7 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { getClusters, type GeoJSONFeatureCollection } from "@/lib/api";
+import { getClusters, getNewsEvents, type GeoJSONFeatureCollection, type NewsEvent } from "@/lib/api";
 import { fetchGeolocationGeoJSON } from "@/lib/geolocation-api";
 import { MOCK_CLUSTERS } from "@/data/mapData";
 import {
@@ -97,6 +97,7 @@ function buildRoutesGeoJSON(): GeoJSONFC {
 const DataContext = createContext<{
   clusters: GeoJSONFeatureCollection;
   geolocationEvents: GeoJSONFC;
+  newsEvents: NewsEvent[];
   events: typeof PLACEHOLDER_EVENTS;
   drones: typeof PLACEHOLDER_DRONES;
   zones: GeoJSONFC;
@@ -127,6 +128,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     type: "FeatureCollection",
     features: [],
   });
+  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
 
@@ -138,6 +140,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setLastUpdated(new Date());
     } catch {
       // Keep existing state (mock data or last live data)
+    }
+  }, []);
+
+  const tryFetchNews = useCallback(async () => {
+    try {
+      const items = await getNewsEvents({ limit: 50, country_iso: "SSD" });
+      setNewsEvents(items);
+    } catch {
+      // Keep existing news
     }
   }, []);
 
@@ -160,6 +171,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [tryFetchClusters]);
 
   useEffect(() => {
+    tryFetchNews();
+    const tN = setInterval(tryFetchNews, 60_000);
+    return () => clearInterval(tN);
+  }, [tryFetchNews]);
+
+  useEffect(() => {
     tryFetchGeolocation();
     const t2 = setInterval(tryFetchGeolocation, 60_000);
     return () => clearInterval(t2);
@@ -169,6 +186,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     () => ({
       clusters,
       geolocationEvents,
+      newsEvents,
       events: PLACEHOLDER_EVENTS,
       drones: PLACEHOLDER_DRONES,
       zones: ZONES,
@@ -178,7 +196,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       lastUpdated,
       isLive,
     }),
-    [clusters, geolocationEvents, lastUpdated, isLive]
+    [clusters, geolocationEvents, newsEvents, lastUpdated, isLive]
   );
 
   return (

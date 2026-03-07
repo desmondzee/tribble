@@ -32,7 +32,30 @@ export interface ConflictNewsItem {
   breaking?: boolean;
 }
 
+export const SOUTH_SUDAN_ZONE: ConflictZone = {
+  id: "CZ-SOUTH-SUDAN",
+  name: "South Sudan",
+  region: "South Sudan",
+  severity: "critical",
+  center: [30.5, 7.0],
+  zoom: 6,
+  bbox: [
+    [27, 4],
+    [34, 10],
+  ],
+  activeIncidents: 361,
+  displaced: "2.3M",
+  description: "Inter-communal violence, political instability.",
+  newsKeywords: ["south sudan", "juba", "unity", "upper nile"],
+  routes: [
+    { id: "RT-SS-001", name: "Juba–Bor Highway", status: "contested", type: "highway", coords: [[31.6, 4.85], [31.6, 6.2]] },
+    { id: "RT-SS-002", name: "Bentiu–Malakal Corridor", status: "blocked", type: "supply_corridor", coords: [[29.8, 9.2], [31.6, 9.5]] },
+    { id: "RT-SS-003", name: "Uganda Border – Nimule", status: "open", type: "border_crossing", coords: [[32.05, 3.6], [32.05, 4.0]] },
+  ],
+};
+
 export const CONFLICT_ZONES: ConflictZone[] = [
+  SOUTH_SUDAN_ZONE,
   {
     id: "CZ-SUDAN-KHARTOUM",
     name: "Khartoum State",

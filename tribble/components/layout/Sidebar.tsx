@@ -236,7 +236,29 @@ export function Sidebar() {
             <p className="font-heading text-[9px] tracking-wider text-muted-foreground mb-2 uppercase">
               NGO Zone
             </p>
-            <select className="w-full h-7 rounded-sm border border-border bg-card px-2 text-[11px] font-mono text-foreground">
+            <select
+              className="w-full h-7 rounded-sm border border-border bg-card px-2 text-[11px] font-mono text-foreground"
+              onChange={(e) => {
+                const ngo = PLACEHOLDER_NGOS.find((n) => n.id === e.target.value);
+                if (ngo) {
+                  useUIStore.getState().setRightPanelOpen(true);
+                  useUIStore.getState().setRightPanelTab("news_feed");
+                  // Fly to the NGO zone center if it has geometry
+                  if (ngo.zone_geojson?.geometry) {
+                    const coords = (ngo.zone_geojson.geometry as { coordinates: number[][][] }).coordinates;
+                    if (coords?.[0]?.[0]) {
+                      const lngs = coords[0].map((c: number[]) => c[0]);
+                      const lats = coords[0].map((c: number[]) => c[1]);
+                      const cLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+                      const cLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                      window.dispatchEvent(
+                        new CustomEvent("hip:flyTo", { detail: { lng: cLng, lat: cLat, zoom: 7 } })
+                      );
+                    }
+                  }
+                }
+              }}
+            >
               <option value="">ALL ZONES</option>
               {PLACEHOLDER_NGOS.map((ngo) => (
                 <option key={ngo.id} value={ngo.id}>

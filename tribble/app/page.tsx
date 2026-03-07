@@ -7,7 +7,6 @@ import { motion, useInView } from "framer-motion";
 import { spring, easeGentle } from "@/lib/animation-tokens";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ClassificationBanner } from "@/components/shared/ClassificationBanner";
 
 const EarthAnimation = dynamic(() => import("@/components/landing/EarthAnimation").then((m) => m.EarthAnimation), { ssr: false });
 
@@ -60,7 +59,6 @@ export default function Home() {
       </div>
       <div className="relative z-10">
       <section className="relative flex min-h-screen flex-col items-start justify-center overflow-hidden pl-8 md:pl-16 lg:pl-24">
-        <ClassificationBanner />
         <div className="relative z-10 flex flex-col items-start justify-center w-full max-w-md">
           <motion.div
             className="w-full"

@@ -34,6 +34,23 @@ export interface GeoJSONFeatureCollection {
   features: ClusterFeature[];
 }
 
+export interface NewsEvent {
+  id: string;
+  headline: string;
+  source: string;
+  severity: "critical" | "high" | "medium" | "low";
+  timestamp: string | null;
+  lat: number | null;
+  lng: number | null;
+  country: string | null;
+  event_type: string | null;
+}
+
+export interface GetNewsParams {
+  limit?: number;
+  country_iso?: string;
+}
+
 function apiUrl(path: string): string {
   if (!BASE_URL) throw new Error("No API URL configured — using mock data");
   return `${BASE_URL}${path}`;
@@ -57,4 +74,50 @@ export async function getClusters(params?: GetClustersParams): Promise<GeoJSONFe
   if (params?.country_iso) sp.set("country_iso", params.country_iso);
   if (params?.limit != null) sp.set("limit", String(params.limit));
   return apiFetch("/api/clusters", sp.size ? sp : undefined);
+}
+
+// ── Report submission ────────────────────────────────────────────────────
+
+export interface ReportSubmission {
+  latitude: number;
+  longitude: number;
+  narrative: string;
+  crisis_categories: string[];
+  help_categories: string[];
+  anonymous: boolean;
+  country?: string;
+  country_iso?: string;
+}
+
+export interface ReportResponse {
+  report_id: string;
+  status: string;
+}
+
+export async function submitReport(data: ReportSubmission): Promise<ReportResponse> {
+  const url = apiUrl("/api/reports");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/reports returned ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Fetch ACLED events as news items for the live feed.
+ */
+export async function getNewsEvents(params?: GetNewsParams): Promise<NewsEvent[]> {
+  const sp = new URLSearchParams();
+  if (params?.limit != null) sp.set("limit", String(params.limit));
+  if (params?.country_iso) sp.set("country_iso", params.country_iso);
+  const url = sp.size ? `${apiUrl("/api/events/news")}?${sp}` : apiUrl("/api/events/news");
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`API /api/events/news returned ${res.status}`);
+  const data = await res.json();
+  return data.items;
 }

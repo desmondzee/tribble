@@ -138,57 +138,57 @@ export function featureToCluster(f: ClusterFeature): ClusterForGeoJSON & Record<
   };
 }
 
-/** Mock clusters for fallback when API is unavailable */
+/** Mock clusters for fallback when API is unavailable — centered on South Sudan */
 export const MOCK_CLUSTERS: ClusterFeature[] = [
   {
     type: "Feature",
-    geometry: { type: "Point", coordinates: [32.6, 15.5] },
+    geometry: { type: "Point", coordinates: [31.6, 4.85] },
     properties: {
       id: "mock-1",
-      report_count: 12,
-      weighted_severity: 0.82,
-      weighted_confidence: 0.7,
+      report_count: 18,
+      weighted_severity: 0.88,
+      weighted_confidence: 0.75,
       top_need_categories: ["food", "health"],
-      radius_km: 45,
+      radius_km: 40,
       country: "SSD",
     },
   },
   {
     type: "Feature",
-    geometry: { type: "Point", coordinates: [36.3, 3.4] },
+    geometry: { type: "Point", coordinates: [29.8, 9.2] },
     properties: {
       id: "mock-2",
-      report_count: 8,
-      weighted_severity: 0.55,
-      weighted_confidence: 0.65,
-      top_need_categories: ["shelter"],
-      radius_km: 30,
-      country: "ETH",
+      report_count: 14,
+      weighted_severity: 0.72,
+      weighted_confidence: 0.68,
+      top_need_categories: ["shelter", "security"],
+      radius_km: 35,
+      country: "SSD",
     },
   },
   {
     type: "Feature",
-    geometry: { type: "Point", coordinates: [29.0, -1.9] },
+    geometry: { type: "Point", coordinates: [31.6, 6.2] },
     properties: {
       id: "mock-3",
-      report_count: 5,
-      weighted_severity: 0.35,
+      report_count: 9,
+      weighted_severity: 0.45,
       weighted_confidence: 0.8,
       top_need_categories: ["water"],
-      radius_km: 25,
-      country: "BDI",
+      radius_km: 28,
+      country: "SSD",
     },
   },
   {
     type: "Feature",
-    geometry: { type: "Point", coordinates: [34.9, 6.0] },
+    geometry: { type: "Point", coordinates: [30.2, 7.5] },
     properties: {
       id: "mock-4",
-      report_count: 22,
+      report_count: 25,
       weighted_severity: 0.91,
       weighted_confidence: 0.85,
       top_need_categories: ["security", "displacement"],
-      radius_km: 60,
+      radius_km: 50,
       country: "SSD",
     },
   },

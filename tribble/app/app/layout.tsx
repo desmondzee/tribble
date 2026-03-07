@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authSlice";
 import { useUIStore } from "@/store/uiSlice";
-import { ClassificationBanner } from "@/components/shared/ClassificationBanner";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { RightPanel } from "@/components/layout/RightPanel";
@@ -57,7 +56,6 @@ export default function AppLayout({
 
   return (
     <div className="landing-page h-screen flex w-full overflow-hidden bg-background text-foreground">
-      <ClassificationBanner />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />

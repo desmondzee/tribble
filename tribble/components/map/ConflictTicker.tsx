@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Radio, ChevronDown, ChevronUp, X } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
   type ConflictZone,
   type ConflictNewsItem,
 } from "@/lib/conflict-zones";
+import { useData } from "@/context/DataContext";
 
 const SEVERITY_DOT: Record<string, string> = {
   critical: "bg-[hsl(var(--hip-critical))]",
@@ -36,10 +37,41 @@ export function ConflictTicker({
   onClearZone,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const { newsEvents } = useData();
+
+  // Compute the latest ACLED data timestamp for the LIVE label
+  const latestDataLabel = useMemo(() => {
+    if (newsEvents.length === 0) return null;
+    const timestamps = newsEvents
+      .map((e) => e.timestamp)
+      .filter((t): t is string => !!t)
+      .map((t) => new Date(t).getTime());
+    if (timestamps.length === 0) return null;
+    const latest = new Date(Math.max(...timestamps));
+    return latest.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [newsEvents]);
+
+  // Map live backend news → ConflictNewsItem format, fall back to static feed
+  const newsFeed: ConflictNewsItem[] = useMemo(() => {
+    if (newsEvents.length === 0) return CONFLICT_NEWS_FEED;
+    return newsEvents.map((e) => ({
+      id: e.id,
+      zoneId: "CZ-SOUTH-SUDAN",
+      source: e.source,
+      headline: e.headline,
+      severity: e.severity,
+      timestamp: e.timestamp || new Date().toISOString(),
+      breaking: e.severity === "critical",
+    }));
+  }, [newsEvents]);
 
   const filteredNews = activeZoneId
-    ? CONFLICT_NEWS_FEED.filter((n) => n.zoneId === activeZoneId)
-    : CONFLICT_NEWS_FEED;
+    ? newsFeed.filter((n) => n.zoneId === activeZoneId)
+    : newsFeed;
 
   const activeZone = CONFLICT_ZONES.find((z) => z.id === activeZoneId);
 
@@ -50,12 +82,12 @@ export function ConflictTicker({
           <div className="flex-shrink-0 flex items-center gap-1.5 px-3 border-r border-border h-full bg-[hsl(var(--hip-critical))]/10">
             <Radio className="w-3 h-3 text-[hsl(var(--hip-critical))] animate-pulse" />
             <span className="font-mono text-[9px] font-bold tracking-widest text-[hsl(var(--hip-critical))]">
-              LIVE
+              LIVE{latestDataLabel ? ` · Data through ${latestDataLabel}` : ""}
             </span>
           </div>
           <div className="flex-1 overflow-hidden relative">
             <div className="flex items-center gap-6 whitespace-nowrap animate-marquee">
-              {[...CONFLICT_NEWS_FEED, ...CONFLICT_NEWS_FEED].map((item, i) => (
+              {[...newsFeed, ...newsFeed].map((item, i) => (
                 <button
                   key={`${item.id}-${i}`}
                   type="button"
