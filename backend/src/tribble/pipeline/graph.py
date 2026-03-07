@@ -1,10 +1,33 @@
+import logging
+from functools import wraps
 from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
 from tribble.pipeline.state import PipelineState, PipelineStatus
 
+logger = logging.getLogger(__name__)
 
+
+def _safe_node(fn):
+    @wraps(fn)
+    def wrapper(state: PipelineState) -> dict:
+        try:
+            return fn(state)
+        except Exception as exc:
+            logger.error(
+                "Pipeline node %s failed for report %s: %s",
+                fn.__name__, state.get("report_id"), exc, exc_info=True,
+            )
+            return {
+                "status": PipelineStatus.ERROR,
+                "node_trace": state.get("node_trace", []) + [fn.__name__],
+                "error": f"{fn.__name__}: {exc}",
+            }
+    return wrapper
+
+
+@_safe_node
 def prefilter(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["prefilter"]
     narrative = (state.get("raw_narrative") or "").strip()

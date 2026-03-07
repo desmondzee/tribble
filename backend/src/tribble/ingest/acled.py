@@ -1,9 +1,11 @@
+import logging
 from datetime import datetime, timezone
-from urllib.parse import urlencode
 
 import httpx
 
 from tribble.models.report import AnonymityLevel, CrisisReport, ReportMode, SourceType
+
+logger = logging.getLogger(__name__)
 
 ACLED_BASE_URL = "https://api.acleddata.com/acled/read"
 
@@ -23,17 +25,30 @@ def acled_event_to_crisis_report(event: dict) -> CrisisReport:
     fatalities = int(event.get("fatalities", 0) or 0)
     if fatalities > 0 and "violence_active_threat" not in cats:
         cats.append("violence_active_threat")
+
     try:
         ts = datetime.strptime(event["event_date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except (ValueError, KeyError):
-        ts = datetime.now(timezone.utc)
+        raise ValueError(
+            f"ACLED event {event.get('event_id_cnty', 'unknown')} has invalid/missing date: "
+            f"{event.get('event_date')!r}"
+        )
+
+    try:
+        lat = float(event["latitude"])
+        lon = float(event["longitude"])
+    except (KeyError, ValueError, TypeError):
+        raise ValueError(
+            f"ACLED event {event.get('event_id_cnty', 'unknown')} has invalid/missing coordinates"
+        )
+
     return CrisisReport(
         source_type=SourceType.ACLED_HISTORICAL,
         mode=ReportMode.INCIDENT_CREATION,
         anonymity=AnonymityLevel.IDENTIFIED,
         event_timestamp=ts,
-        latitude=float(event.get("latitude", 0)),
-        longitude=float(event.get("longitude", 0)),
+        latitude=lat,
+        longitude=lon,
         narrative=f"[ACLED] {event_type}: {event.get('sub_event_type', '')}. {event.get('notes', '')}",
         language="en",
         crisis_categories=cats,
@@ -53,20 +68,37 @@ class ACLEDClient:
         self.email = email
         self._http = httpx.AsyncClient(timeout=30.0)
 
-    def _build_url(self, country: str, year: int, limit: int = 500, page: int = 1) -> str:
-        return f"{ACLED_BASE_URL}?{urlencode({
-            'key': self.api_key,
-            'email': self.email,
-            'country': country,
-            'year': str(year),
-            'limit': str(limit),
-            'page': str(page),
-        })}"
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_):
+        await self._http.aclose()
+
+    def _build_params(self, country: str, year: int, limit: int = 500, page: int = 1) -> dict:
+        if not country or len(country) > 100:
+            raise ValueError(f"Invalid country parameter: {country!r}")
+        if year < 1990 or year > 2100:
+            raise ValueError(f"Year out of range: {year}")
+        if limit < 1 or limit > 5000:
+            raise ValueError(f"Limit out of range: {limit}")
+        return {
+            "key": self.api_key,
+            "email": self.email,
+            "country": country,
+            "year": str(year),
+            "limit": str(limit),
+            "page": str(page),
+        }
 
     async def fetch_events(self, country: str, year: int, limit: int = 500) -> list[dict]:
-        r = await self._http.get(self._build_url(country, year, limit))
+        params = self._build_params(country, year, limit)
+        r = await self._http.get(ACLED_BASE_URL, params=params)
         r.raise_for_status()
-        return r.json().get("data", [])
+        body = r.json()
+        if "data" not in body:
+            logger.error("ACLED API response missing 'data' key, keys: %s", list(body.keys()))
+            raise ValueError("Unexpected ACLED API response format")
+        return body["data"]
 
     async def import_as_reports(
         self, country: str, year: int, limit: int = 500

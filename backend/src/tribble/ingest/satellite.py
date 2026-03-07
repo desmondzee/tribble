@@ -1,6 +1,10 @@
+import logging
+
 import httpx
 
 from tribble.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 def build_stac_search_params(
@@ -33,13 +37,19 @@ async def search_sentinel2_scenes(
     async with httpx.AsyncClient(timeout=30.0) as c:
         r = await c.post(f"{settings.sentinel_stac_url}/search", json=params)
         r.raise_for_status()
-    return [
-        {
-            "scene_id": f["id"],
-            "acquisition_date": f.get("properties", {}).get("datetime"),
-            "cloud_cover_pct": f.get("properties", {}).get("eo:cloud_cover", 0),
-            "tile_url": (f["links"][0]["href"] if f.get("links") else None),
-            "bbox": f.get("bbox"),
-        }
-        for f in r.json().get("features", [])
-    ]
+        features = r.json().get("features", [])
+
+    results = []
+    for f in features:
+        try:
+            links = f.get("links") or []
+            results.append({
+                "scene_id": f["id"],
+                "acquisition_date": f.get("properties", {}).get("datetime"),
+                "cloud_cover_pct": f.get("properties", {}).get("eo:cloud_cover", 0),
+                "tile_url": links[0]["href"] if links else None,
+                "bbox": f.get("bbox"),
+            })
+        except (KeyError, IndexError) as exc:
+            logger.warning("Skipping malformed STAC feature: %s", exc)
+    return results

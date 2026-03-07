@@ -1,10 +1,14 @@
+import logging
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from tribble.db import get_supabase
 from tribble.models.report import AnonymityLevel, ReportMode, SourceType
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
@@ -13,9 +17,9 @@ class ReportSubmission(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     narrative: str = Field(min_length=10, max_length=5000)
-    language: str = "en"
-    crisis_categories: list[str] = Field(default_factory=list)
-    help_categories: list[str] = Field(default_factory=list)
+    language: str = Field(default="en", min_length=2, max_length=35)
+    crisis_categories: list[str] = Field(default_factory=list, max_length=20)
+    help_categories: list[str] = Field(default_factory=list, max_length=20)
     anonymous: bool = True
     parent_report_id: str | None = None
 
@@ -49,6 +53,8 @@ async def submit_report(sub: ReportSubmission):
             )
             .execute()
         )
+        if not loc.data:
+            raise HTTPException(500, "Failed to create location record")
 
         rpt = (
             db.table("reports")
@@ -69,11 +75,17 @@ async def submit_report(sub: ReportSubmission):
             )
             .execute()
         )
+        if not rpt.data:
+            raise HTTPException(500, "Failed to create report record")
 
         rid = rpt.data[0]["id"]
         db.table("pipeline_jobs").insert({"report_id": rid, "priority": 0}).execute()
         return ReportResponse(report_id=rid, status="queued")
     except HTTPException:
         raise
-    except Exception:
+    except httpx.ConnectError as exc:
+        logger.error("Supabase connection failed: %s", exc)
         raise HTTPException(503, "Database unavailable")
+    except Exception as exc:
+        logger.exception("Unhandled error in report submission")
+        raise HTTPException(500, "Internal server error")
