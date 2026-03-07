@@ -15,7 +15,18 @@ class Settings(BaseSettings):
     openweathermap_api_key: str = Field(default="", repr=False)
     zai_api_key: str = Field(default="", repr=False)
     zai_model: str = "glm-4"
-    sentinel_stac_url: str = "https://earth-search.aws.element84.com/v1"
+    enable_openclaw: bool = False
+    enable_flock: bool = False
+    enable_satellite_ml: bool = False
+    flock_api_base_url: str = "https://api.flock.io/v1"
+    flock_api_key: str = Field(default="", repr=False)
+    flock_model: str = "meta-llama/Llama-3.3-70B-Instruct"
+    sentinel_stac_url: str = "https://planetarycomputer.microsoft.com/api/stac/v1"
+    satellite_cloud_cover_threshold: float = 40.0
+    satellite_min_scl_clear_pct: float = 60.0
+    satellite_change_window_days: int = 14
+    satellite_ml_provider_url: str = ""
+    satellite_ml_api_key: str = Field(default="", repr=False)
     pipeline_max_retries: int = 3
     cluster_radius_km: float = 5.0
     cluster_time_window_hours: int = 72
