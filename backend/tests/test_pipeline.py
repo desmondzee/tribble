@@ -1,5 +1,5 @@
 from tribble.pipeline.state import PipelineState, PipelineStatus
-from tribble.pipeline.graph import build_pipeline
+from tribble.pipeline.graph import build_pipeline, classify
 
 
 def _state(**kw) -> PipelineState:
@@ -60,3 +60,29 @@ def test_state_has_report_type_and_validation():
     )
     assert s["report_type"] == "water_need"
     assert s.get("validation_context") is None
+
+
+def test_classify_shelling():
+    s = _state(raw_narrative="Heavy shelling near airport", report_type="shelling")
+    result = classify(s)
+    assert result["classification"]["crisis_categories"] == ["security"]
+    assert result["classification"]["urgency_hint"] == "medium"
+
+
+def test_classify_water_need():
+    s = _state(raw_narrative="Water station destroyed", report_type="water_need")
+    result = classify(s)
+    assert result["classification"]["crisis_categories"] == ["water_sanitation"]
+
+
+def test_classify_looting_maps_dual():
+    s = _state(raw_narrative="Market looted", report_type="looting")
+    result = classify(s)
+    assert "security" in result["classification"]["crisis_categories"]
+    assert "food" in result["classification"]["crisis_categories"]
+
+
+def test_classify_no_report_type_falls_back():
+    s = _state(raw_narrative="Something happened")
+    result = classify(s)
+    assert result["classification"]["crisis_categories"] == []

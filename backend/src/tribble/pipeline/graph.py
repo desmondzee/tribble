@@ -59,16 +59,49 @@ def translate(state: PipelineState) -> dict:
     return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": t}
 
 
+REPORT_TYPE_CATEGORIES: dict[str, list[str]] = {
+    "shelling": ["security"],
+    "gunfire": ["security"],
+    "food_need": ["food"],
+    "water_need": ["water_sanitation"],
+    "medical_need": ["health"],
+    "shelter_need": ["shelter"],
+    "displacement": ["displacement"],
+    "infrastructure_damage": ["infrastructure"],
+    "aid_blocked": ["access"],
+    "looting": ["security", "food"],
+    "missing_persons": ["security"],
+}
+
+SEVERITY_URGENCY: dict[str, str] = {
+    "critical": "critical",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+}
+
+
 @_safe_node
 def classify(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["classify"]
+    report_type = state.get("report_type") or ""
+    categories = list(REPORT_TYPE_CATEGORIES.get(report_type, []))
+
+    narrative = state.get("raw_narrative") or ""
+    severity_hints = ["critical", "high", "medium", "low"]
+    urgency = "medium"
+    for hint in severity_hints:
+        if hint in narrative.lower():
+            urgency = SEVERITY_URGENCY[hint]
+            break
+
     return {
         "status": PipelineStatus.CLASSIFIED,
         "node_trace": trace,
         "classification": {
-            "crisis_categories": [],
+            "crisis_categories": categories,
             "help_categories": [],
-            "urgency_hint": "medium",
+            "urgency_hint": urgency,
         },
     }
 
