@@ -5,6 +5,7 @@ import { Calendar, ImageIcon, Cloud, ExternalLink } from "lucide-react";
 import {
   getSatelliteScenes,
   getSatelliteScenesIntervals,
+  getSatellitePreviewUrl,
   type SatelliteScene,
   type SatelliteSceneInterval,
 } from "@/lib/api";
@@ -21,19 +22,20 @@ function formatDate(iso: string | null): string {
 
 function SceneRow({ scene }: { scene: SatelliteScene }) {
   const [imgError, setImgError] = useState(false);
-  const showThumb = scene.tile_url && !imgError;
+  const previewUrl = scene.scene_id ? getSatellitePreviewUrl(scene.scene_id) : null;
+  const showThumb = previewUrl && !imgError;
   return (
     <div className="border-b border-border/60 py-2 px-3 flex items-center gap-3">
-      {showThumb && scene.tile_url && (
+      {showThumb && previewUrl && (
         <a
-          href={scene.tile_url}
+          href={previewUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-shrink-0 w-14 h-14 rounded overflow-hidden border border-border bg-muted"
           title="Open full image"
         >
           <img
-            src={scene.tile_url}
+            src={previewUrl}
             alt=""
             className="w-full h-full object-cover"
             onError={() => setImgError(true)}
@@ -54,9 +56,9 @@ function SceneRow({ scene }: { scene: SatelliteScene }) {
           )}
         </p>
       </div>
-      {scene.tile_url && (
+      {previewUrl && (
         <a
-          href={scene.tile_url}
+          href={previewUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex-shrink-0 text-primary hover:underline flex items-center gap-1 font-mono text-[10px]"

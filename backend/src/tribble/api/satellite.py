@@ -1,9 +1,12 @@
 """Satellite scenes API: list scenes in a date range for the UI."""
 from datetime import datetime, timedelta
 
+import httpx
 from fastapi import APIRouter, Query, HTTPException
+from fastapi.responses import Response
 
 from tribble.db import get_supabase
+from tribble.ingest.satellite import viewable_preview_url
 
 router = APIRouter(prefix="/api/satellite", tags=["satellite"])
 
@@ -73,3 +76,31 @@ async def list_satellite_scenes(
     )
     scenes = r.data or []
     return {"scenes": scenes, "date_from": date_from, "date_to": date_to}
+
+
+@router.get("/preview")
+async def get_satellite_preview(
+    scene_id: str = Query(..., description="STAC item id (e.g. S2B_MSIL2A_...)"),
+    collection: str = Query("sentinel-2-l2a", description="STAC collection id"),
+):
+    """Proxy Planetary Computer preview image so the browser can load it same-origin.
+
+    Fetches the PNG from Planetary Computer Data API and streams it with
+    appropriate headers so <img src="/api/satellite/preview?scene_id=..."> works.
+    """
+    url = viewable_preview_url(collection, scene_id)
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            return Response(
+                content=r.content,
+                media_type="image/png",
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                },
+            )
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail="Preview unavailable")
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to fetch preview")

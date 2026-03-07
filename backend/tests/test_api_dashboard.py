@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from fastapi.testclient import TestClient
 from tribble.main import app
@@ -142,3 +142,26 @@ def test_satellite_scenes_intervals_from_data(mock_get_sb):
     assert data["max_date"] == "2024-05-15"
     assert len(data["intervals"]) >= 1
     assert all("label" in i and "date_from" in i and "date_to" in i for i in data["intervals"])
+
+
+@patch("tribble.api.satellite.httpx.AsyncClient")
+def test_satellite_preview_proxy_returns_png(mock_client_cls):
+    """Preview endpoint proxies Planetary Computer and returns image/png."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b"\x89PNG\r\n\x1a\n"
+    mock_response.raise_for_status = MagicMock()
+
+    async def fake_get(url):
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = fake_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client_cls.return_value = mock_client
+
+    response = client.get("/api/satellite/preview?scene_id=S2B_MSIL2A_20220606T080609_R078_T36PUR_20220606T193343")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert b"PNG" in response.content

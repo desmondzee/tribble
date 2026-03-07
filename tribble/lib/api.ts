@@ -254,3 +254,9 @@ export async function getSatelliteScenes(
   if (!res.ok) throw new Error(`API /api/satellite/scenes returned ${res.status}`);
   return res.json();
 }
+
+/** URL for the proxied satellite preview image (same-origin so images load reliably). */
+export function getSatellitePreviewUrl(sceneId: string, collection = "sentinel-2-l2a"): string {
+  const params = new URLSearchParams({ scene_id: sceneId, collection });
+  return `${apiUrl("/api/satellite/preview")}?${params.toString()}`;
+}
