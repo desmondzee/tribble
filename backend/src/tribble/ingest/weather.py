@@ -37,6 +37,49 @@ def compute_weather_risks(c: WeatherConditions) -> WeatherRisks:
     return WeatherRisks(round(flood, 3), round(storm, 3), round(heat, 3), round(route, 3))
 
 
+async def fetch_historical_weather(
+    lat: float = 13.63,
+    lon: float = 25.35,
+    start_date: str = "2024-05-01",
+    end_date: str = "2024-05-11",
+) -> list[dict]:
+    """Fetch historical daily weather from Open-Meteo Archive API (free, no key)."""
+    settings = get_settings()
+    base_url = settings.open_meteo_base_url
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": "temperature_2m_mean,relative_humidity_2m_mean,wind_speed_10m_max,precipitation_sum",
+        "timezone": "UTC",
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.get(base_url, params=params)
+        r.raise_for_status()
+        data = r.json()
+
+    daily = data.get("daily", {})
+    dates = daily.get("time", [])
+    temps = daily.get("temperature_2m_mean", [])
+    humidities = daily.get("relative_humidity_2m_mean", [])
+    winds = daily.get("wind_speed_10m_max", [])
+    precips = daily.get("precipitation_sum", [])
+
+    rows: list[dict] = []
+    for i, date in enumerate(dates):
+        rows.append({
+            "date": date,
+            "lat": lat,
+            "lng": lon,
+            "temperature_c": temps[i] if i < len(temps) else None,
+            "humidity_pct": humidities[i] if i < len(humidities) else None,
+            "wind_speed_ms": (winds[i] / 3.6) if i < len(winds) and winds[i] is not None else None,
+            "precipitation_mm": precips[i] if i < len(precips) else None,
+        })
+    return rows
+
+
 async def fetch_weather(lat: float, lon: float) -> WeatherConditions:
     settings = get_settings()
     async with httpx.AsyncClient(timeout=10.0) as client:

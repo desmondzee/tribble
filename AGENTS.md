@@ -14,6 +14,7 @@ This is a **pipeline, not an agent swarm**. LangGraph orchestrates a fixed 11-no
 - **Backend:** Python 3.12 + FastAPI + LangGraph (in `backend/` — to be created)
 - **Database:** Supabase (Postgres + PostGIS + RLS)
 - **Testing:** pytest + pytest-asyncio (backend), Vitest (frontend)
+- **MCP:** Supabase MCP is configured in `.cursor/mcp.json`; see `docs/mcp-supabase.md`.
 
 ## Implementation Plan
 

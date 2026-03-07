@@ -100,6 +100,73 @@ class ACLEDClient:
             raise ValueError("Unexpected ACLED API response format")
         return body["data"]
 
+    async def fetch_el_fasher_events(
+        self, limit: int = 500
+    ) -> list[dict]:
+        """Fetch ACLED events filtered to El Fasher bbox, May 1-11 2024.
+
+        Returns dicts shaped for the 'events' Supabase table.
+        """
+        raw = await self.fetch_events("Sudan", 2024, limit=limit)
+
+        # Filter to El Fasher bbox: lat 13.3-14.0, lon 24.8-26.0
+        # and date range May 1-11
+        filtered = []
+        for e in raw:
+            try:
+                lat = float(e.get("latitude", 0))
+                lon = float(e.get("longitude", 0))
+                date_str = e.get("event_date", "")
+            except (ValueError, TypeError):
+                continue
+
+            if not (13.3 <= lat <= 14.0 and 24.8 <= lon <= 26.0):
+                continue
+            if not (date_str >= "2024-05-01" and date_str <= "2024-05-11"):
+                continue
+
+            event_type = e.get("event_type", "")
+            fatalities = int(e.get("fatalities", 0) or 0)
+
+            # Map ACLED event_type to ontology_class
+            ontology_map = {
+                "Battles": "armed_conflict",
+                "Explosions/Remote violence": "shelling",
+                "Violence against civilians": "armed_conflict",
+                "Protests": "suspicious_activity",
+                "Riots": "armed_conflict",
+                "Strategic developments": "aid_obstruction",
+            }
+            ontology = ontology_map.get(event_type, "armed_conflict")
+
+            # Map fatalities to severity
+            if fatalities >= 10:
+                severity = "critical"
+            elif fatalities >= 3:
+                severity = "high"
+            elif fatalities >= 1:
+                severity = "medium"
+            else:
+                severity = "low"
+
+            filtered.append({
+                "ontology_class": ontology,
+                "severity": severity,
+                "lat": lat,
+                "lng": lon,
+                "region_id": "north-darfur",
+                "location_name": e.get("location", "El Fasher"),
+                "timestamp": f"{date_str}T00:00:00Z",
+                "description": f"[ACLED] {event_type}: {e.get('sub_event_type', '')}. {e.get('notes', '')}",
+                "source_type": "acled",
+                "source_label": f"ACLED {e.get('event_id_cnty', '')}",
+                "confidence_score": 0.85,
+                "verification_status": "verified",
+                "assigned_ngo_ids": [],
+                "related_event_ids": [],
+            })
+        return filtered
+
     async def import_as_reports(
         self, country: str, year: int, limit: int = 500
     ) -> list[CrisisReport]:

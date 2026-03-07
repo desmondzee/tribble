@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     cluster_radius_km: float = 5.0
     cluster_time_window_hours: int = 72
     cors_origins: list[str] = ["http://localhost:3000"]
+    gemini_api_key: str = Field(default="", repr=False)
+    gemini_model: str = "gemini-2.5-flash"
+    discord_webhook_url: str = ""
+    open_meteo_base_url: str = "https://archive-api.open-meteo.com/v1/archive"
 
 
 @lru_cache

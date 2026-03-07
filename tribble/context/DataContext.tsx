@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import { getClusters, type GeoJSONFeatureCollection } from "@/lib/api";
 import { fetchGeolocationGeoJSON } from "@/lib/geolocation-api";
@@ -19,6 +20,16 @@ import {
   PLACEHOLDER_NGOS,
 } from "@/lib/placeholder-data";
 import { CONFLICT_ZONES } from "@/lib/conflict-zones";
+import {
+  fetchEvents as sbFetchEvents,
+  fetchDrones as sbFetchDrones,
+  fetchZones as sbFetchZones,
+  fetchBoundaries as sbFetchBoundaries,
+  fetchNGOs as sbFetchNGOs,
+} from "@/lib/supabase/queries";
+import { createClient } from "@/lib/supabase/client";
+import type { HipEvent, Drone, NGO } from "@/types";
+import type { DbZone, DbBoundary } from "@/lib/supabase/types";
 
 export interface GeoJSONFC {
   type: "FeatureCollection";
@@ -29,7 +40,24 @@ export interface GeoJSONFC {
   }>;
 }
 
-function buildZonesGeoJSON(): GeoJSONFC {
+function buildZonesGeoJSON(
+  zones?: DbZone[]
+): GeoJSONFC {
+  if (zones && zones.length > 0) {
+    return {
+      type: "FeatureCollection",
+      features: zones.map((z) => ({
+        type: "Feature" as const,
+        properties: {
+          id: z.id,
+          zone_type: z.zone_type,
+          name: z.name,
+          risk_score: z.risk_score,
+        },
+        geometry: (z.geojson as GeoJSON.Feature).geometry as GeoJSON.Geometry,
+      })),
+    };
+  }
   return {
     type: "FeatureCollection",
     features: PLACEHOLDER_ZONES.map((z) => ({
@@ -45,7 +73,23 @@ function buildZonesGeoJSON(): GeoJSONFC {
   };
 }
 
-function buildBoundariesGeoJSON(): GeoJSONFC {
+function buildBoundariesGeoJSON(
+  boundaries?: DbBoundary[]
+): GeoJSONFC {
+  if (boundaries && boundaries.length > 0) {
+    return {
+      type: "FeatureCollection",
+      features: boundaries.map((b) => ({
+        type: "Feature" as const,
+        properties: {
+          id: b.id,
+          boundary_type: b.boundary_type,
+          name: b.name,
+        },
+        geometry: (b.geojson as GeoJSON.Feature).geometry as GeoJSON.Geometry,
+      })),
+    };
+  }
   return {
     type: "FeatureCollection",
     features: PLACEHOLDER_BOUNDARIES.map((b) => ({
@@ -60,18 +104,21 @@ function buildBoundariesGeoJSON(): GeoJSONFC {
   };
 }
 
-function buildNGOZonesGeoJSON(): GeoJSONFC {
+function buildNGOZonesGeoJSON(ngos?: NGO[]): GeoJSONFC {
+  const src = ngos && ngos.length > 0 ? ngos : PLACEHOLDER_NGOS;
   return {
     type: "FeatureCollection",
-    features: PLACEHOLDER_NGOS.filter((n) => n.zone_geojson).map((n) => ({
-      type: "Feature" as const,
-      properties: {
-        id: n.id,
-        name: n.abbreviation,
-        colour: n.colour,
-      },
-      geometry: n.zone_geojson!.geometry as GeoJSON.Geometry,
-    })),
+    features: src
+      .filter((n) => n.zone_geojson)
+      .map((n) => ({
+        type: "Feature" as const,
+        properties: {
+          id: n.id,
+          name: n.abbreviation,
+          colour: n.colour,
+        },
+        geometry: n.zone_geojson!.geometry as GeoJSON.Geometry,
+      })),
   };
 }
 
@@ -97,8 +144,8 @@ function buildRoutesGeoJSON(): GeoJSONFC {
 const DataContext = createContext<{
   clusters: GeoJSONFeatureCollection;
   geolocationEvents: GeoJSONFC;
-  events: typeof PLACEHOLDER_EVENTS;
-  drones: typeof PLACEHOLDER_DRONES;
+  events: HipEvent[];
+  drones: Drone[];
   zones: GeoJSONFC;
   boundaries: GeoJSONFC;
   ngoZones: GeoJSONFC;
@@ -113,9 +160,6 @@ export function useData() {
   return ctx;
 }
 
-const ZONES = buildZonesGeoJSON();
-const BOUNDARIES = buildBoundariesGeoJSON();
-const NGO_ZONES = buildNGOZonesGeoJSON();
 const ROUTES = buildRoutesGeoJSON();
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
@@ -129,6 +173,86 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
+
+  // Supabase-backed state (falls back to placeholders)
+  const [events, setEvents] = useState<HipEvent[]>(PLACEHOLDER_EVENTS);
+  const [drones, setDrones] = useState<Drone[]>(PLACEHOLDER_DRONES);
+  const [dbZones, setDbZones] = useState<DbZone[]>([]);
+  const [dbBoundaries, setDbBoundaries] = useState<DbBoundary[]>([]);
+  const [ngos, setNgos] = useState<NGO[]>([]);
+
+  // Derived GeoJSON from DB or placeholder data
+  const zones = useMemo(() => buildZonesGeoJSON(dbZones), [dbZones]);
+  const boundaries = useMemo(
+    () => buildBoundariesGeoJSON(dbBoundaries),
+    [dbBoundaries]
+  );
+  const ngoZones = useMemo(() => buildNGOZonesGeoJSON(ngos), [ngos]);
+
+  // Fetch Supabase data on mount
+  const hasFetchedSupabase = useRef(false);
+  useEffect(() => {
+    if (hasFetchedSupabase.current) return;
+    hasFetchedSupabase.current = true;
+
+    async function loadSupabaseData() {
+      const [sbEvents, sbDrones, sbZonesData, sbBoundariesData, sbNgos] =
+        await Promise.all([
+          sbFetchEvents(),
+          sbFetchDrones(),
+          sbFetchZones(),
+          sbFetchBoundaries(),
+          sbFetchNGOs(),
+        ]);
+
+      if (sbEvents.length > 0) setEvents(sbEvents);
+      if (sbDrones.length > 0) setDrones(sbDrones);
+      if (sbZonesData.length > 0) setDbZones(sbZonesData);
+      if (sbBoundariesData.length > 0) setDbBoundaries(sbBoundariesData);
+      if (sbNgos.length > 0) setNgos(sbNgos);
+    }
+
+    loadSupabaseData();
+  }, []);
+
+  // Supabase realtime subscription for new events
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel("events-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "events" },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>;
+          const newEvent: HipEvent = {
+            id: row.id as string,
+            ontology_class: row.ontology_class as HipEvent["ontology_class"],
+            severity: row.severity as HipEvent["severity"],
+            lat: row.lat as number,
+            lng: row.lng as number,
+            region_id: (row.region_id as string) ?? "",
+            location_name: row.location_name as string,
+            timestamp: row.timestamp as string,
+            description: row.description as string,
+            source_type: row.source_type as HipEvent["source_type"],
+            source_label: row.source_label as string,
+            confidence_score: row.confidence_score as number,
+            verification_status:
+              row.verification_status as HipEvent["verification_status"],
+            assigned_ngo_ids: (row.assigned_ngo_ids as string[]) ?? [],
+            related_event_ids: (row.related_event_ids as string[]) ?? [],
+            last_updated: row.last_updated as string,
+          };
+          setEvents((prev) => [newEvent, ...prev]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const tryFetchClusters = useCallback(async () => {
     try {
@@ -169,16 +293,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     () => ({
       clusters,
       geolocationEvents,
-      events: PLACEHOLDER_EVENTS,
-      drones: PLACEHOLDER_DRONES,
-      zones: ZONES,
-      boundaries: BOUNDARIES,
-      ngoZones: NGO_ZONES,
+      events,
+      drones,
+      zones,
+      boundaries,
+      ngoZones,
       routes: ROUTES,
       lastUpdated,
       isLive,
     }),
-    [clusters, geolocationEvents, lastUpdated, isLive]
+    [
+      clusters,
+      geolocationEvents,
+      events,
+      drones,
+      zones,
+      boundaries,
+      ngoZones,
+      lastUpdated,
+      isLive,
+    ]
   );
 
   return (

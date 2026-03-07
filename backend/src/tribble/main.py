@@ -9,6 +9,7 @@ from tribble.api.reports import router as reports_router
 from tribble.api.simulation import router as simulation_router
 from tribble.api.streaming import router as streaming_router
 from tribble.api.worker import router as worker_router
+from tribble.api.analysis import router as analysis_router
 from tribble.config import get_settings
 
 app = FastAPI(title="Tribble", version="0.1.0")
@@ -20,6 +21,7 @@ app.include_router(realtime_router)
 app.include_router(simulation_router)
 app.include_router(streaming_router)
 app.include_router(worker_router)
+app.include_router(analysis_router)
 
 _settings = get_settings()
 app.add_middleware(
