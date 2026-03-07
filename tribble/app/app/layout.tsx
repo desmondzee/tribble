@@ -9,7 +9,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { TimelineStrip } from "@/components/layout/TimelineStrip";
 import { CommandPalette } from "@/components/layout/CommandPalette";
-import { GlobeMap } from "@/components/map/GlobeMap";
+import TacticalMap from "@/components/map/TacticalMap";
 
 export default function AppLayout({
   children,
@@ -61,7 +61,7 @@ export default function AppLayout({
         <TopBar />
         <div className="flex-1 flex min-h-0 relative">
           <div className="absolute inset-0 z-0">
-            <GlobeMap />
+            <TacticalMap />
           </div>
           <div className="relative z-10 flex-1 min-w-0 pointer-events-none">
             {children}

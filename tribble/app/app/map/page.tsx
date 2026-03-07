@@ -1,13 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
 import { useUIStore } from "@/store/uiSlice";
 import { MessageSquare, Filter } from "lucide-react";
 import { LayerControlPanel } from "@/components/map/LayerControlPanel";
 import { FilterPanel } from "@/components/map/FilterPanel";
 import { MapLegend } from "@/components/map/MapLegend";
-import { ConflictTicker } from "@/components/map/ConflictTicker";
-import type { ConflictZone } from "@/lib/conflict-zones";
 
 export default function MapPage() {
   const {
@@ -15,39 +12,10 @@ export default function MapPage() {
     rightPanelOpen,
     filterPanelOpen,
     setFilterPanelOpen,
-    activeConflictZoneId,
-    setActiveConflictZoneId,
   } = useUIStore();
-
-  const handleSelectZone = useCallback(
-    (zone: ConflictZone) => {
-      setActiveConflictZoneId(zone.id);
-      window.dispatchEvent(
-        new CustomEvent("hip:flyTo", {
-          detail: { lng: zone.center[0], lat: zone.center[1], zoom: zone.zoom },
-        })
-      );
-    },
-    [setActiveConflictZoneId]
-  );
-
-  const handleClearZone = useCallback(() => {
-    setActiveConflictZoneId(null);
-    window.dispatchEvent(
-      new CustomEvent("hip:flyTo", {
-        detail: { lng: 19, lat: 15, zoom: 1 },
-      })
-    );
-  }, [setActiveConflictZoneId]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      <ConflictTicker
-        activeZoneId={activeConflictZoneId}
-        onSelectZone={handleSelectZone}
-        onClearZone={handleClearZone}
-      />
-
       <div
         className={`transition-transform duration-300 ${filterPanelOpen ? "translate-x-[280px]" : ""}`}
         style={{ marginTop: "66px" }}

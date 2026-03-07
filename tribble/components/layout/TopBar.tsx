@@ -11,7 +11,6 @@ import {
   ROLE_DESCRIPTIONS,
   type AppRole,
 } from "@/store/roleSlice";
-import { useRealtimeStore } from "@/store/realtimeSlice";
 import { SOURCE_ICONS } from "@/lib/icon-registry";
 import type { SourceType } from "@/types";
 import { useState, useRef, useEffect } from "react";
@@ -58,7 +57,6 @@ export function TopBar() {
   } = useUIStore();
   const { severities, sourcesVisible, setFilter } = useFilterStore();
   const { activeRole, setActiveRole } = useRoleStore();
-  const { connected, recentEventIds } = useRealtimeStore();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const title = ROUTE_TITLES[pathname] || "HIP";
@@ -116,20 +114,6 @@ export function TopBar() {
               </motion.span>
             ))}
           </AnimatePresence>
-
-          <motion.span
-            className={`font-mono text-[10px] rounded-sm px-2 py-0.5 whitespace-nowrap ml-auto mr-auto border ${
-              connected
-                ? "text-[hsl(var(--hip-green))] bg-[hsl(var(--hip-green))/0.1] border-[hsl(var(--hip-green))/0.2]"
-                : "text-destructive bg-destructive/10 border-destructive/20"
-            }`}
-            animate={{ opacity: [0.7, 1, 0.7] }}
-            transition={{ duration: 3, repeat: Infinity }}
-          >
-            {connected
-              ? `${recentEventIds.length} LIVE EVENTS`
-              : "REALTIME DISCONNECTED"}
-          </motion.span>
         </div>
 
         {activeRole !== "civilian" && (
@@ -243,65 +227,6 @@ export function TopBar() {
           )}
         </div>
       </header>
-
-      <div
-        className="h-6 flex items-center overflow-hidden relative"
-        style={{
-          background: "rgba(255,45,85,0.08)",
-          borderBottom: "1px solid rgba(255,45,85,0.3)",
-        }}
-      >
-        <div className="flex items-center gap-1.5 px-2 flex-shrink-0">
-          <motion.span
-            className="font-mono text-[9px] text-destructive font-bold tracking-wider"
-            animate={{ opacity: [1, 0.3, 1] }}
-            transition={{ duration: 0.8, repeat: Infinity }}
-          >
-            LIVE
-          </motion.span>
-        </div>
-        <div className="flex-1 overflow-hidden">
-          <div className="animate-marquee flex gap-8 whitespace-nowrap">
-            {[
-              {
-                sev: "CRITICAL",
-                id: "EVT-0042",
-                type: "Armed Conflict",
-                region: "Northern Corridor",
-                time: "2m ago",
-              },
-              {
-                sev: "HIGH",
-                id: "EVT-0038",
-                type: "Displacement",
-                region: "Eastern Zone",
-                time: "8m ago",
-              },
-            ].map((entry, i) => (
-              <span
-                key={i}
-                className="flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors"
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    entry.sev === "CRITICAL" ? "bg-destructive" : "bg-orange-500"
-                  }`}
-                />
-                <span className="font-mono text-[9px] text-muted-foreground">
-                  <span
-                    className={
-                      entry.sev === "CRITICAL" ? "text-destructive" : ""
-                    }
-                  >
-                    {entry.sev}
-                  </span>{" "}
-                  {entry.id} · {entry.type} · {entry.region} · {entry.time}
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import type { Map as MapboxMap } from "mapbox-gl";
+import type { Map as MapboxMap, FillLayer, LineLayer } from "mapbox-gl";
 import Map, {
   Marker,
   Source,
@@ -11,12 +11,15 @@ import Map, {
 import "mapbox-gl/dist/mapbox-gl.css";
 import "@/styles/map.css";
 import ClusterMarker from "./ClusterMarker";
+import { EventMarker } from "./EventMarker";
+import { DroneMarker } from "./DroneMarker";
 import {
   buildCoverageGeoJSON,
   buildSeverityZoneGeoJSON,
   featureToCluster,
 } from "@/data/mapData";
 import { useData } from "@/context/DataContext";
+import { useUIStore } from "@/store/uiSlice";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -66,17 +69,73 @@ const LAYER_META = [
   { key: "clusters", label: "CLUSTERS" },
   { key: "coverage", label: "COVERAGE" },
   { key: "severityZones", label: "SEVERITY ZONES" },
-];
+  { key: "zones", label: "ZONES" },
+  { key: "boundaries", label: "BOUNDARIES" },
+  { key: "events", label: "EVENTS" },
+  { key: "drones", label: "DRONES" },
+  { key: "ngoZones", label: "NGO ZONES" },
+  { key: "routes", label: "ROUTES" },
+  { key: "geolocation", label: "GEOLOCATION" },
+] as const;
 
-const DEFAULT_VIEW = { longitude: 0, latitude: 20, zoom: 2 };
+type LayerKey = (typeof LAYER_META)[number]["key"];
+
+const ZONES_FILL_PAINT = {
+  "fill-color": [
+    "match",
+    ["get", "zone_type"],
+    "no_go_zone", "rgba(255, 45, 85, 0.12)",
+    "conflict_zone", "rgba(255, 107, 53, 0.08)",
+    "contested_territory", "rgba(123, 97, 255, 0.08)",
+    "safe_zone", "rgba(0, 255, 136, 0.08)",
+    "transparent",
+  ],
+  "fill-opacity": 0.8,
+};
+const ZONES_LINE_PAINT = {
+  "line-color": [
+    "match",
+    ["get", "zone_type"],
+    "no_go_zone", "#FF2D55",
+    "conflict_zone", "#FF6B35",
+    "contested_territory", "#7B61FF",
+    "safe_zone", "#00FF88",
+    "#1E2D4A",
+  ],
+  "line-width": 1.5,
+  "line-dasharray": [4, 3],
+};
+const BOUNDARIES_LINE_PAINT = {
+  "line-color": [
+    "match",
+    ["get", "boundary_type"],
+    "international_border", "#E8EDF5",
+    "disputed_border", "#FF6B35",
+    "frontline_active", "#FF2D55",
+    "#1E2D4A",
+  ],
+  "line-width": 1.5,
+  "line-opacity": 0.8,
+  "line-dasharray": [4, 3],
+};
+
+const DEFAULT_VIEW = { longitude: 30, latitude: 15, zoom: 4 };
 
 export default function TacticalMap() {
-  const { clusters } = useData();
+  const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents } = useData();
+  const { setSelectedEventId, setRightPanelOpen, setRightPanelTab } = useUIStore();
 
-  const [layers, setLayers] = useState({
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     clusters: true,
     coverage: true,
     severityZones: true,
+    zones: true,
+    boundaries: true,
+    events: true,
+    drones: true,
+    ngoZones: true,
+    routes: true,
+    geolocation: true,
   });
   const [viewState, setViewState] = useState({
     ...DEFAULT_VIEW,
@@ -101,8 +160,7 @@ export default function TacticalMap() {
   );
 
   const toggleLayer = useCallback(
-    (key: "clusters" | "coverage" | "severityZones") =>
-      setLayers((prev) => ({ ...prev, [key]: !prev[key] })),
+    (key: LayerKey) => setLayers((prev) => ({ ...prev, [key]: !prev[key] })),
     []
   );
 
@@ -145,6 +203,21 @@ export default function TacticalMap() {
       void map.off("moveend", onMoveEnd);
     };
   }, [mapLoaded]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { lng, lat, zoom } = (e as CustomEvent<{ lng: number; lat: number; zoom: number }>).detail;
+      mapRef.current?.flyTo({
+        center: [lng, lat],
+        zoom,
+        duration: 1500,
+        essential: true,
+      });
+      setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat, zoom }));
+    };
+    window.addEventListener("hip:flyTo", handler);
+    return () => window.removeEventListener("hip:flyTo", handler);
+  }, []);
 
   if (!isTokenValid) {
     return (
@@ -234,6 +307,97 @@ export default function TacticalMap() {
           </Source>
         )}
 
+        {mapLoaded && layers.zones && zones.features.length > 0 && (
+          <Source id="zones" type="geojson" data={zones as GeoJSON.FeatureCollection}>
+            <Layer id="zones-fill" type="fill" paint={ZONES_FILL_PAINT as FillLayer["paint"]} />
+            <Layer id="zones-line" type="line" paint={ZONES_LINE_PAINT as LineLayer["paint"]} />
+          </Source>
+        )}
+        {mapLoaded && layers.boundaries && boundaries.features.length > 0 && (
+          <Source id="boundaries" type="geojson" data={boundaries as GeoJSON.FeatureCollection}>
+            <Layer id="boundaries-line" type="line" paint={BOUNDARIES_LINE_PAINT as LineLayer["paint"]} />
+          </Source>
+        )}
+        {mapLoaded && layers.ngoZones && ngoZones.features.length > 0 && (
+          <Source id="ngo-zones" type="geojson" data={ngoZones as GeoJSON.FeatureCollection}>
+            <Layer
+              id="ngo-zones-fill"
+              type="fill"
+              paint={{
+                "fill-color": ["get", "colour"],
+                "fill-opacity": 0.12,
+              }}
+            />
+          </Source>
+        )}
+        {mapLoaded && layers.routes && routes.features.length > 0 && (
+          <Source id="routes" type="geojson" data={routes as GeoJSON.FeatureCollection}>
+            <Layer
+              id="routes-line"
+              type="line"
+              paint={{
+                "line-color": "#38bdf8",
+                "line-width": 2,
+                "line-opacity": 0.7,
+                "line-dasharray": [2, 2],
+              }}
+            />
+          </Source>
+        )}
+        {mapLoaded && layers.geolocation && geolocationEvents.features.length > 0 && (
+          <Source id="geolocation" type="geojson" data={geolocationEvents as GeoJSON.FeatureCollection}>
+            <Layer
+              id="geolocation-circles"
+              type="circle"
+              paint={{
+                "circle-radius": [
+                  "interpolate",
+                  ["linear"],
+                  ["coalesce", ["get", "confidence_score"], 0.5],
+                  0.5,
+                  6,
+                  1,
+                  12,
+                ],
+                "circle-color": [
+                  "case",
+                  ["coalesce", ["get", "needs_human_review"], false],
+                  "#f97316",
+                  "#00ff88",
+                ],
+                "circle-opacity": 0.8,
+                "circle-stroke-width": 1,
+                "circle-stroke-color": "#fff",
+              }}
+            />
+          </Source>
+        )}
+
+        {layers.events &&
+          events.map((evt) => (
+            <Marker key={evt.id} longitude={evt.lng} latitude={evt.lat} anchor="center">
+              <EventMarker
+                event={evt}
+                onClick={() => {
+                  setSelectedEventId(evt.id);
+                  setRightPanelOpen(true);
+                  setRightPanelTab("news_feed");
+                }}
+              />
+            </Marker>
+          ))}
+        {layers.drones &&
+          drones.map((d) => (
+            <Marker
+              key={d.id}
+              longitude={d.position.lng}
+              latitude={d.position.lat}
+              anchor="center"
+            >
+              <DroneMarker drone={d} />
+            </Marker>
+          ))}
+
         {layers.clusters &&
           clusters.features.map((f) => {
             const [lng, lat] = f.geometry.coordinates;
@@ -302,7 +466,7 @@ export default function TacticalMap() {
             <button
               key={key}
               className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
-              onClick={() => toggleLayer(key as "clusters" | "coverage" | "severityZones")}
+              onClick={() => toggleLayer(key)}
             >
               <span className={`map-layer-dot ${key}`} />
               {label}

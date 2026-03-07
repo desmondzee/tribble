@@ -22,7 +22,7 @@ export async function fetchGeolocationGeoJSON(
   const base = getBaseUrl();
   const url = base
     ? `${base}/api/geolocation/geojson?limit=${limit}`
-    : "/api/geolocation/geojson?limit=${limit}";
+    : `http://localhost:8000/api/geolocation/geojson?limit=${limit}`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch geolocation: ${response.status}`);

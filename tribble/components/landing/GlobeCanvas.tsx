@@ -77,13 +77,12 @@ export function GlobeCanvas() {
     container.appendChild(renderer.domElement);
 
     const radius = 2;
+    const voxelRadius = 1.95; // Slightly outside sphere so voxels render in front
+    const sphereRadius = 1.85; // Sphere behind voxels — blue shows through for ocean
     const resolution = 60;
 
-    // Land voxels
+    // Land voxels — green overlay on blue planet (only land, no ocean voxels)
     const pos: number[] = [];
-    const col: number[] = [];
-    const colorLand = new THREE.Color("#2e7d32"); // Earth green
-    const colorOcean = new THREE.Color("#1565c0"); // Deep ocean blue
 
     for (let i = 0; i < resolution; i++) {
       const phi = Math.acos(-1 + (2 * i) / resolution);
@@ -94,20 +93,13 @@ export function GlobeCanvas() {
         const theta = (2 * Math.PI * j) / thetaCount;
         const land = isLand(phi, theta);
 
-        const x = radius * Math.sin(phi) * Math.sin(theta);
-        const y = radius * Math.cos(phi);
-        const z = radius * Math.sin(phi) * Math.cos(theta);
+        if (!land) continue; // Only land voxels — blue sphere shows through for ocean
+
+        const x = voxelRadius * Math.sin(phi) * Math.sin(theta);
+        const y = voxelRadius * Math.cos(phi);
+        const z = voxelRadius * Math.sin(phi) * Math.cos(theta);
 
         pos.push(x, y, z);
-        if (land) {
-          col.push(colorLand.r, colorLand.g, colorLand.b);
-        } else if (Math.random() > 0.9) {
-          col.push(colorOcean.r, colorOcean.g, colorOcean.b);
-        } else {
-          pos.pop();
-          pos.pop();
-          pos.pop();
-        }
       }
     }
 
@@ -115,12 +107,13 @@ export function GlobeCanvas() {
     const boxGeo = new THREE.BoxGeometry(0.04, 0.04, 0.06);
     const instancedMesh = new THREE.InstancedMesh(
       boxGeo,
-      new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
+      new THREE.MeshBasicMaterial({
+        color: 0x22c55e, // Solid green — avoids instanceColor/vertexColors black bug
+        toneMapped: false,
+      }),
       count
     );
     instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    instancedMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(col), 3);
-    instancedMesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
 
     const dummy = new THREE.Object3D();
     for (let i = 0; i < count; i++) {
@@ -128,15 +121,13 @@ export function GlobeCanvas() {
       dummy.lookAt(0, 0, 0);
       dummy.updateMatrix();
       instancedMesh.setMatrixAt(i, dummy.matrix);
-      instancedMesh.setColorAt(i, new THREE.Color(col[i * 3], col[i * 3 + 1], col[i * 3 + 2]));
     }
     instancedMesh.instanceMatrix.needsUpdate = true;
-    instancedMesh.instanceColor!.needsUpdate = true;
     scene.add(instancedMesh);
 
-    // Inner sphere
-    const sphereGeo = new THREE.SphereGeometry(1.9, 32, 32);
-    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x0d47a1 }); // Deep ocean base
+    // Inner sphere — behind voxels so blue shows for ocean, green voxels in front for land
+    const sphereGeo = new THREE.SphereGeometry(sphereRadius, 32, 32);
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0x1e40af }); // Blue planet base (visible)
     const sphere = new THREE.Mesh(sphereGeo, sphereMat);
     scene.add(sphere);
 
@@ -167,11 +158,11 @@ export function GlobeCanvas() {
     const pointsGeo = new THREE.BufferGeometry();
     pointsGeo.setAttribute("position", new THREE.Float32BufferAttribute(hotspotPos, 3));
     const pointsMat = new THREE.PointsMaterial({
-      color: 0xff3300,
+      color: 0xef4444, // Red hotspot markers
       size: 0.08,
       sizeAttenuation: true,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.7,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
@@ -190,10 +181,10 @@ export function GlobeCanvas() {
     const starGeo = new THREE.BufferGeometry();
     starGeo.setAttribute("position", new THREE.Float32BufferAttribute(starPos, 3));
     const starMat = new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.6,
+      color: 0x94a3b8,
+      size: 0.5,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.6,
       sizeAttenuation: true,
     });
     const stars = new THREE.Points(starGeo, starMat);
@@ -207,14 +198,30 @@ export function GlobeCanvas() {
     group.rotation.set(0, 0, 0.2);
     scene.add(group);
 
+    // Fly-in animation: start small (far away), ease out to full size
+    const flyInDuration = 2.2;
+    const flyInStartScale = 0.12;
+    const flyInEndScale = 1;
+    let flyInStartTime: number | null = null;
+
     let frameId: number;
     let lastTime = performance.now();
+
+    const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
 
     const animate = () => {
       frameId = requestAnimationFrame(animate);
       const now = performance.now();
       const delta = (now - lastTime) / 1000;
       lastTime = now;
+
+      // Fly-in: scale from small to full over flyInDuration
+      if (flyInStartTime === null) flyInStartTime = now;
+      const flyInElapsed = (now - flyInStartTime) / 1000;
+      const flyInT = Math.min(1, flyInElapsed / flyInDuration);
+      const flyInEased = easeOutCubic(flyInT);
+      const scale = flyInStartScale + (flyInEndScale - flyInStartScale) * flyInEased;
+      group.scale.setScalar(scale);
 
       group.rotation.y += delta * 0.05;
       const t = (typeof window !== "undefined" ? window.scrollY : 0) * 0.0015;
@@ -249,7 +256,7 @@ export function GlobeCanvas() {
       ref={containerRef}
       className="absolute inset-0 w-full h-full"
       style={{
-        background: "radial-gradient(circle at center, hsl(228 45% 9%) 0%, #000 100%)",
+        background: "radial-gradient(circle at center, hsl(228 40% 6%) 0%, #000 100%)",
         pointerEvents: "none",
       }}
     />

@@ -81,6 +81,51 @@
   opacity: 0.18;
 }
 
+/* ─── Event Map Markers ─────────────────────────────────────────────── */
+.event-map-marker {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.event-map-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+}
+.event-map-marker:hover .event-map-dot {
+  transform: scale(1.3);
+}
+
+/* ─── Drone Map Markers ─────────────────────────────────────────────── */
+.drone-map-marker {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.drone-map-marker .drone-map-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.5);
+}
+.drone-map-marker .drone-map-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid;
+  opacity: 0.15;
+}
+
 /* ─── Map HUD Overlay ──────────────────────────────────────────────── */
 .map-hud-overlay {
   position: absolute;
@@ -221,6 +266,34 @@
 .map-layer-btn.active .map-layer-dot.severityZones {
   background: var(--red);
   box-shadow: 0 0 6px var(--red);
+}
+.map-layer-btn.active .map-layer-dot.zones {
+  background: #7b61ff;
+  box-shadow: 0 0 6px #7b61ff;
+}
+.map-layer-btn.active .map-layer-dot.boundaries {
+  background: #e8edf5;
+  box-shadow: 0 0 6px #e8edf5;
+}
+.map-layer-btn.active .map-layer-dot.events {
+  background: #f97316;
+  box-shadow: 0 0 6px #f97316;
+}
+.map-layer-btn.active .map-layer-dot.drones {
+  background: #00ff99;
+  box-shadow: 0 0 6px #00ff99;
+}
+.map-layer-btn.active .map-layer-dot.ngoZones {
+  background: #00d4ff;
+  box-shadow: 0 0 6px #00d4ff;
+}
+.map-layer-btn.active .map-layer-dot.routes {
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+}
+.map-layer-btn.active .map-layer-dot.geolocation {
+  background: #00ff88;
+  box-shadow: 0 0 6px #00ff88;
 }
 
 .map-hud-meta {
