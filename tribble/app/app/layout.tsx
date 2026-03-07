@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authSlice";
 import { useUIStore } from "@/store/uiSlice";
+import { useReportsStore } from "@/store/reportsSlice";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { RightPanel } from "@/components/layout/RightPanel";
@@ -26,6 +27,10 @@ export default function AppLayout({
       router.replace("/auth/signin");
     }
   }, [status, router]);
+
+  useEffect(() => {
+    useReportsStore.getState().hydrate();
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

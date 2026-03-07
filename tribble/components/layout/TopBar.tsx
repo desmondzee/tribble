@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal, Bell, Menu, ChevronDown } from "lucide-react";
+import { Search, SlidersHorizontal, Bell, Menu, ChevronDown, Inbox } from "lucide-react";
 import { useUIStore } from "@/store/uiSlice";
 import { useFilterStore } from "@/store/filterSlice";
 import {
@@ -14,6 +15,7 @@ import {
 import { SOURCE_ICONS } from "@/lib/icon-registry";
 import type { SourceType } from "@/types";
 import { useState, useRef, useEffect } from "react";
+import { PLACEHOLDER_SUBMISSIONS } from "@/lib/placeholder-data";
 
 const ALL_SOURCES: SourceType[] = [
   "news_agent",
@@ -58,7 +60,9 @@ export function TopBar() {
   const { severities, sourcesVisible, setFilter } = useFilterStore();
   const { activeRole, setActiveRole } = useRoleStore();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   const title = ROUTE_TITLES[pathname] || "Tribble";
 
   useEffect(() => {
@@ -69,10 +73,24 @@ export function TopBar() {
       ) {
         setRoleDropdownOpen(false);
       }
+      if (
+        notificationsRef.current &&
+        !notificationsRef.current.contains(e.target as Node)
+      ) {
+        setNotificationsOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const pendingSubmissionsCount =
+    activeRole !== "civilian"
+      ? PLACEHOLDER_SUBMISSIONS.filter(
+          (s) => s.status === "pending" || s.status === "in_review"
+        ).length
+      : 0;
+  const recentSubmissions = PLACEHOLDER_SUBMISSIONS.slice(0, 5);
 
   const activeFilters: string[] = [];
   if (severities.length < 4) activeFilters.push(`${severities.length} severity`);
@@ -198,15 +216,93 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="relative text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Bell className="w-4 h-4" />
-            <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-destructive flex items-center justify-center">
-              <span className="font-mono text-[8px] text-foreground">3</span>
-            </span>
-          </button>
+          <div className="relative" ref={notificationsRef}>
+            <button
+              type="button"
+              className="relative text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              title={
+                activeRole !== "civilian"
+                  ? "User submissions"
+                  : "Notifications"
+              }
+            >
+              <Bell className="w-4 h-4" />
+              {activeRole !== "civilian" && pendingSubmissionsCount > 0 ? (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[hsl(var(--hip-warn))] flex items-center justify-center">
+                  <span className="font-mono text-[8px] text-foreground">
+                    {pendingSubmissionsCount > 9 ? "9+" : pendingSubmissionsCount}
+                  </span>
+                </span>
+              ) : activeRole === "civilian" ? (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-destructive flex items-center justify-center">
+                  <span className="font-mono text-[8px] text-foreground">3</span>
+                </span>
+              ) : null}
+            </button>
+            <AnimatePresence>
+              {notificationsOpen && activeRole !== "civilian" && (
+                <motion.div
+                  className="absolute top-full right-0 mt-1 w-80 max-h-[70vh] overflow-hidden bg-card border border-border rounded-sm shadow-lg z-50 flex flex-col"
+                  initial={{ opacity: 0, y: -4, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                    <span className="font-heading text-[11px] tracking-wider text-foreground">
+                      USER SUBMISSIONS
+                    </span>
+                    {pendingSubmissionsCount > 0 && (
+                      <span className="font-mono text-[9px] text-[hsl(var(--hip-warn))]">
+                        {pendingSubmissionsCount} pending
+                      </span>
+                    )}
+                  </div>
+                  <div className="overflow-y-auto flex-1">
+                    {recentSubmissions.length === 0 ? (
+                      <p className="font-body text-xs text-muted-foreground p-4">
+                        No submissions in the queue.
+                      </p>
+                    ) : (
+                      <ul className="p-2 space-y-1">
+                        {recentSubmissions.map((s) => (
+                          <li key={s.id}>
+                            <Link
+                              href={`/app/submissions`}
+                              onClick={() => setNotificationsOpen(false)}
+                              className="block p-2 rounded-sm hover:bg-popover transition-colors"
+                            >
+                              <p className="font-body text-xs text-foreground line-clamp-2">
+                                {s.description}
+                              </p>
+                              <p className="font-mono text-[9px] text-muted-foreground mt-1">
+                                {s.status === "pending" || s.status === "in_review"
+                                  ? "Pending"
+                                  : s.status}
+                                {" · "}
+                                {new Date(s.submitted_at).toLocaleDateString()}
+                              </p>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="p-2 border-t border-border">
+                    <Link
+                      href="/app/submissions"
+                      onClick={() => setNotificationsOpen(false)}
+                      className="flex items-center justify-center gap-2 w-full py-2 rounded-sm bg-popover hover:bg-primary/10 text-foreground font-heading text-[11px] tracking-wider transition-colors"
+                    >
+                      <Inbox className="w-3.5 h-3.5" />
+                      View all submissions
+                    </Link>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button
             type="button"
             className="text-muted-foreground hover:text-foreground transition-colors"

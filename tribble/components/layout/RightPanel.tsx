@@ -1,11 +1,13 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Newspaper, Bot, Radio, Target } from "lucide-react";
+import { ChevronRight, Newspaper, Bot, Radio, Target, MapPin } from "lucide-react";
 import { spring } from "@/lib/animation-tokens";
 import { useUIStore } from "@/store/uiSlice";
 import { useData } from "@/context/DataContext";
 import { ClusterInspectPanel } from "./ClusterInspectPanel";
+import { HeliosChat } from "./HeliosChat";
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: "bg-[hsl(var(--hip-critical))]",
@@ -38,7 +40,22 @@ function flyToEvent(lat: number | null, lng: number | null) {
 }
 
 function NewsFeed() {
-  const { newsEvents } = useData();
+  const { newsEvents, events } = useData();
+  const { selectedEventId, selectedNewsEventId } = useUIStore();
+  const selectedNewsRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (selectedNewsEventId && selectedNewsRef.current) {
+      selectedNewsRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedNewsEventId]);
+
+  const selectedPlaceholderEvent = selectedEventId
+    ? events.find((e) => e.id === selectedEventId)
+    : null;
+  const selectedNewsEvent = selectedNewsEventId
+    ? newsEvents.find((e) => e.id === selectedNewsEventId)
+    : null;
 
   if (newsEvents.length === 0) {
     return (
@@ -65,16 +82,53 @@ function NewsFeed() {
           {newsEvents.length} events
         </span>
       </div>
+
+      {(selectedPlaceholderEvent || selectedNewsEvent) && (
+        <div className="mb-3 p-3 rounded-md bg-primary/10 border border-primary/20">
+          <p className="font-mono text-[9px] tracking-wider text-primary mb-1.5">
+            SELECTED FROM MAP
+          </p>
+          {selectedPlaceholderEvent && (
+            <div>
+              <p className="text-[11px] font-medium text-foreground leading-tight">
+                {selectedPlaceholderEvent.location_name}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-3">
+                {selectedPlaceholderEvent.description}
+              </p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-1">
+                {selectedPlaceholderEvent.source_label} · {selectedPlaceholderEvent.severity}
+              </p>
+            </div>
+          )}
+          {selectedNewsEvent && (
+            <div>
+              <p className="text-[11px] font-medium text-foreground leading-tight">
+                {selectedNewsEvent.headline}
+              </p>
+              <p className="font-mono text-[9px] text-primary/70 mt-0.5">{selectedNewsEvent.source}</p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-1">
+                {timeSince(selectedNewsEvent.timestamp)} · {selectedNewsEvent.severity}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {newsEvents.map((evt) => (
         <button
           key={evt.id}
+          ref={evt.id === selectedNewsEventId ? selectedNewsRef : undefined}
           type="button"
-          className="w-full text-left p-2.5 rounded-md hover:bg-muted/50 transition-colors group"
+          className={`w-full text-left p-2.5 rounded-md hover:bg-muted/50 transition-colors group ${
+            evt.id === selectedNewsEventId ? "ring-2 ring-primary bg-primary/5" : ""
+          }`}
           onClick={() => flyToEvent(evt.lat, evt.lng)}
         >
           <div className="flex items-start gap-2">
             <span
-              className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${SEVERITY_COLOR[evt.severity]}`}
+              className={`flex-shrink-0 mt-1 w-4 h-4 rounded-full border-2 ${SEVERITY_COLOR[evt.severity]}`}
+              aria-hidden
             />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
@@ -90,6 +144,9 @@ function NewsFeed() {
                   <span className="font-mono text-[8px] text-muted-foreground truncate">
                     {evt.event_type}
                   </span>
+                )}
+                {evt.lat != null && evt.lng != null && (
+                  <MapPin className="w-3 h-3 text-muted-foreground/70 flex-shrink-0" title="On map" />
                 )}
               </div>
               <p className="text-[11px] text-foreground/90 leading-tight line-clamp-2 group-hover:text-foreground">
@@ -174,18 +231,19 @@ export function RightPanel() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-auto p-3">
-            {rightPanelTab === "news_feed" ? (
-              <NewsFeed />
-            ) : rightPanelTab === "cluster_inspect" ? (
-              <ClusterInspectPanel />
-            ) : (
-              <p className="font-body text-sm text-muted-foreground">
-                HELIOS operational assistant placeholder. Natural language
-                queries, situation reports, and asset dispatch coming soon.
-              </p>
-            )}
-          </div>
+          {rightPanelTab === "agent" ? (
+            <div className="flex-1 overflow-hidden">
+              <HeliosChat />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-auto p-3">
+              {rightPanelTab === "news_feed" ? (
+                <NewsFeed />
+              ) : (
+                <ClusterInspectPanel />
+              )}
+            </div>
+          )}
         </motion.aside>
       )}
     </AnimatePresence>

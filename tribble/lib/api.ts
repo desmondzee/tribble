@@ -121,3 +121,20 @@ export async function getNewsEvents(params?: GetNewsParams): Promise<NewsEvent[]
   const data = await res.json();
   return data.items;
 }
+
+// ── HELIOS AI Chat ────────────────────────────────────────────────────
+
+export async function sendHeliosMessage(message: string): Promise<string> {
+  const url = apiUrl("/api/helios/chat");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `HELIOS returned ${res.status}`);
+  }
+  const data = await res.json();
+  return data.reply;
+}

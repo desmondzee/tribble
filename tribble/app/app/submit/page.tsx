@@ -2,13 +2,17 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { MapPin, Send, Crosshair, Check, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { submitReport } from "@/lib/api";
 import { CRISIS_CATEGORIES, HELP_CATEGORIES } from "@/lib/report-categories";
 import { useUIStore } from "@/store/uiSlice";
+import { useReportsStore } from "@/store/reportsSlice";
 
 export default function SubmitPage() {
   const { setLocationPickMode } = useUIStore();
+  const addReport = useReportsStore((s) => s.addReport);
+  const myReportsCount = useReportsStore((s) => s.myReports.length);
 
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
@@ -72,6 +76,16 @@ export default function SubmitPage() {
         anonymous,
         country: "South Sudan",
         country_iso: "SSD",
+      });
+      addReport({
+        report_id: res.report_id,
+        narrative,
+        lat: parseFloat(lat),
+        lng: parseFloat(lng),
+        submitted_at: new Date().toISOString(),
+        status: res.status,
+        crisis_categories: [...crisisCategories],
+        help_categories: [...helpCategories],
       });
       toast.success(`Report queued — ID: ${res.report_id}`);
       // Reset form
@@ -269,6 +283,13 @@ export default function SubmitPage() {
           )}
         </button>
       </div>
+      {myReportsCount > 0 && (
+        <p className="font-body text-xs text-muted-foreground mt-4 text-center">
+          <Link href="/app/reports" className="text-primary hover:underline">
+            View my reports ({myReportsCount})
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

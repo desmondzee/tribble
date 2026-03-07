@@ -122,9 +122,10 @@ const BOUNDARIES_LINE_PAINT = {
 const DEFAULT_VIEW = { longitude: 30.5, latitude: 7.0, zoom: 5.5 };
 
 export default function LiveMap() {
-  const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents } = useData();
+  const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents, newsEvents } = useData();
   const {
     setSelectedEventId,
+    setSelectedNewsEventId,
     setRightPanelOpen,
     setRightPanelTab,
     setSelectedClusterId,
@@ -165,6 +166,26 @@ export default function LiveMap() {
     () => buildSeverityZoneGeoJSON(flatClusters),
     [flatClusters]
   );
+  const eventsCircleGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
+    const points: GeoJSON.Feature<GeoJSON.Point, { id: string; severity: string }>[] = [];
+    events.forEach((evt) => {
+      points.push({
+        type: "Feature",
+        properties: { id: evt.id, severity: evt.severity },
+        geometry: { type: "Point", coordinates: [evt.lng, evt.lat] },
+      });
+    });
+    newsEvents.forEach((evt) => {
+      if (evt.lat != null && evt.lng != null) {
+        points.push({
+          type: "Feature",
+          properties: { id: evt.id, severity: evt.severity },
+          geometry: { type: "Point", coordinates: [evt.lng, evt.lat] },
+        });
+      }
+    });
+    return { type: "FeatureCollection", features: points };
+  }, [events, newsEvents]);
 
   const toggleLayer = useCallback(
     (key: LayerKey) => setLayers((prev) => ({ ...prev, [key]: !prev[key] })),
@@ -190,6 +211,77 @@ export default function LiveMap() {
     mapRef.current = evt.target;
     setMapLoaded(true);
   }, []);
+
+  const handleMapClick = useCallback(
+    (e: { lngLat: { lng: number; lat: number }; point: { x: number; y: number } }) => {
+      if (locationPickMode) {
+        window.dispatchEvent(
+          new CustomEvent("hip:locationPicked", {
+            detail: { lat: e.lngLat.lat, lng: e.lngLat.lng },
+          })
+        );
+        setLocationPickMode(false);
+        return;
+      }
+      const map = mapRef.current;
+      if (!map || !layers.events) return;
+      const features = map.queryRenderedFeatures(e.point, {
+        layers: ["event-circles-layer"],
+      });
+      if (features.length === 0) return;
+      const first = features[0];
+      const id = first.properties?.id as string | undefined;
+      if (!id) return;
+      const placeholderEvent = events.find((ev) => ev.id === id);
+      const newsEvent = newsEvents.find((ev) => ev.id === id);
+      if (placeholderEvent) {
+        setSelectedEventId(id);
+        setSelectedNewsEventId(null);
+        setRightPanelOpen(true);
+        setRightPanelTab("news_feed");
+        map.flyTo({
+          center: [placeholderEvent.lng, placeholderEvent.lat],
+          zoom: 9,
+          duration: 800,
+          essential: true,
+        });
+        setViewState((prev) => ({
+          ...prev,
+          longitude: placeholderEvent.lng,
+          latitude: placeholderEvent.lat,
+          zoom: 9,
+        }));
+      } else if (newsEvent && newsEvent.lat != null && newsEvent.lng != null) {
+        setSelectedNewsEventId(id);
+        setSelectedEventId(null);
+        setRightPanelOpen(true);
+        setRightPanelTab("news_feed");
+        map.flyTo({
+          center: [newsEvent.lng, newsEvent.lat],
+          zoom: 9,
+          duration: 800,
+          essential: true,
+        });
+        setViewState((prev) => ({
+          ...prev,
+          longitude: newsEvent.lng!,
+          latitude: newsEvent.lat!,
+          zoom: 9,
+        }));
+      }
+    },
+    [
+      locationPickMode,
+      setLocationPickMode,
+      layers.events,
+      events,
+      newsEvents,
+      setSelectedEventId,
+      setSelectedNewsEventId,
+      setRightPanelOpen,
+      setRightPanelTab,
+    ]
+  );
 
   useEffect(() => {
     const map = mapRef.current;
@@ -295,14 +387,7 @@ export default function LiveMap() {
         onMove={(e) => setViewState(e.viewState)}
         onLoad={handleMapLoad}
         onClick={(e) => {
-          if (locationPickMode) {
-            window.dispatchEvent(
-              new CustomEvent("hip:locationPicked", {
-                detail: { lat: e.lngLat.lat, lng: e.lngLat.lng },
-              })
-            );
-            setLocationPickMode(false);
-          }
+          handleMapClick(e);
         }}
         mapboxAccessToken={TOKEN}
         mapStyle={MAP_STYLES[mapMode]}
@@ -385,6 +470,29 @@ export default function LiveMap() {
                 ],
                 "circle-opacity": 0.8,
                 "circle-stroke-width": 1,
+                "circle-stroke-color": "#fff",
+              }}
+            />
+          </Source>
+        )}
+
+        {mapLoaded && layers.events && eventsCircleGeoJSON.features.length > 0 && (
+          <Source id="event-circles" type="geojson" data={eventsCircleGeoJSON}>
+            <Layer
+              id="event-circles-layer"
+              type="circle"
+              paint={{
+                "circle-radius": 10,
+                "circle-color": [
+                  "match",
+                  ["get", "severity"],
+                  "critical", "#ef4444",
+                  "high", "#f97316",
+                  "medium", "#eab308",
+                  "#38bdf8",
+                ],
+                "circle-opacity": 0.75,
+                "circle-stroke-width": 2,
                 "circle-stroke-color": "#fff",
               }}
             />
