@@ -4,6 +4,9 @@
 .env.production
 .env.*.local
 
+# MCP config may contain PATs — use .cursor/mcp.example.json as template
+.cursor/mcp.json
+
 # Python
 __pycache__/
 *.py[cod]
