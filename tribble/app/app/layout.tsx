@@ -4,12 +4,13 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authSlice";
 import { useUIStore } from "@/store/uiSlice";
+import { ClassificationBanner } from "@/components/shared/ClassificationBanner";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { RightPanel } from "@/components/layout/RightPanel";
 import { TimelineStrip } from "@/components/layout/TimelineStrip";
 import { CommandPalette } from "@/components/layout/CommandPalette";
-import TacticalMap from "@/components/map/TacticalMap";
+import LiveMap from "@/components/map/LiveMap";
 
 export default function AppLayout({
   children,
@@ -55,13 +56,14 @@ export default function AppLayout({
   if (status !== "authenticated") return null;
 
   return (
-    <div className="h-screen flex w-full overflow-hidden bg-background">
+    <div className="landing-page h-screen flex w-full overflow-hidden bg-background text-foreground">
+      <ClassificationBanner />
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
         <div className="flex-1 flex min-h-0 relative">
           <div className="absolute inset-0 z-0">
-            <TacticalMap />
+            <LiveMap />
           </div>
           <div className="relative z-10 flex-1 min-w-0 pointer-events-none">
             {children}

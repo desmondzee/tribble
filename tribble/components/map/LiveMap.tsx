@@ -121,7 +121,7 @@ const BOUNDARIES_LINE_PAINT = {
 
 const DEFAULT_VIEW = { longitude: 30, latitude: 15, zoom: 4 };
 
-export default function TacticalMap() {
+export default function LiveMap() {
   const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents } = useData();
   const { setSelectedEventId, setRightPanelOpen, setRightPanelTab } = useUIStore();
 

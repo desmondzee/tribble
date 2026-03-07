@@ -13,7 +13,7 @@ interface AuthSlice {
 
 export const useAuthStore = create<AuthSlice>((set) => ({
   user: null,
-  role: "analyst",
+  role: "ngo_viewer",
   status: "unauthenticated",
   setRole: (role) => set({ role }),
   login: () => {
@@ -25,5 +25,5 @@ export const useAuthStore = create<AuthSlice>((set) => ({
       }));
     }, 1000);
   },
-  logout: () => set({ user: null, status: "unauthenticated", role: "analyst" }),
+  logout: () => set({ user: null, status: "unauthenticated", role: "ngo_viewer" }),
 }));

@@ -7,8 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Map,
   AlertTriangle,
-  Brain,
-  Navigation,
+  Layers,
+  Satellite,
   FileText,
   Settings,
   LogOut,
@@ -31,8 +31,8 @@ import { PLACEHOLDER_NGOS, PLACEHOLDER_SUBMISSIONS, PLACEHOLDER_EVENTS } from "@
 const ICON_MAP = {
   Map,
   AlertTriangle,
-  Brain,
-  Navigation,
+  Layers,
+  Satellite,
   FileText,
   Settings,
   Inbox,
@@ -64,8 +64,8 @@ const CIVILIAN_NAV: NavDef[] = [
 const ORG_NAV: NavDef[] = [
   { icon: "Map", label: "Intelligence Map", path: "/app/map" },
   { icon: "AlertTriangle", label: "Events", path: "/app/events", badgeKey: "events" },
-  { icon: "Brain", label: "Intelligence", path: "/app/intelligence" },
-  { icon: "Navigation", label: "Drone Fleet", path: "/app/drones" },
+  { icon: "Layers", label: "Intelligence", path: "/app/intelligence" },
+  { icon: "Satellite", label: "Drone Fleet", path: "/app/drones" },
   { icon: "FileText", label: "Reports", path: "/app/reports" },
   { icon: "Inbox", label: "Submissions", path: "/app/submissions", badgeKey: "submissions" },
   { icon: "BarChart3", label: "Analytics", path: "/app/analytics" },
@@ -122,7 +122,7 @@ export function Sidebar() {
           <div className="flex items-center justify-between w-full">
             <div>
               <p className="font-mono text-[11px] text-primary tracking-widest leading-none">
-                HIP
+                Tribble
               </p>
               <p className="font-heading text-[9px] tracking-wider text-muted-foreground leading-tight mt-0.5">
                 HUMANITARIAN INTELLIGENCE
@@ -182,7 +182,6 @@ export function Sidebar() {
                 <motion.div
                   layoutId="sidebar-active"
                   className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary"
-                  style={{ boxShadow: "inset 2px 0 8px rgba(0,212,255,0.12)" }}
                   transition={spring}
                 />
               )}
