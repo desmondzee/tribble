@@ -1,26 +1,144 @@
 @import "tailwindcss";
 
+/* HIP Dark-only palette — HSL values for hsl(var(--x)) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 228 45% 7%;
+  --foreground: 222 25% 90%;
+  --card: 224 30% 9%;
+  --card-foreground: 222 25% 90%;
+  --popover: 226 30% 15%;
+  --popover-foreground: 222 25% 90%;
+  --primary: 190 100% 50%;
+  --primary-foreground: 228 45% 7%;
+  --secondary: 255 100% 69%;
+  --secondary-foreground: 222 25% 90%;
+  --muted: 222 20% 38%;
+  --muted-foreground: 222 20% 59%;
+  --accent: 190 100% 50%;
+  --accent-foreground: 228 45% 7%;
+  --destructive: 348 100% 59%;
+  --destructive-foreground: 222 25% 90%;
+  --border: 217 44% 20%;
+  --input: 224 30% 9%;
+  --ring: 190 100% 50%;
+  --radius: 0.25rem;
+  --hip-bg: 228 45% 7%;
+  --hip-dark: 224 30% 9%;
+  --hip-mid: 226 30% 15%;
+  --hip-accent: 190 100% 50%;
+  --hip-green: 150 100% 50%;
+  --hip-critical: 348 100% 59%;
+  --hip-high: 25 100% 50%;
+  --hip-medium: 45 100% 50%;
+  --hip-low: 220 10% 45%;
+  --hip-warn: 20 100% 60%;
+  --hip-accent2: 262 83% 58%;
+  --hip-light: 222 25% 90%;
+  --hip-white: 222 25% 95%;
+  --sidebar-background: 226 30% 15%;
+  --sidebar-foreground: 222 25% 90%;
+  --sidebar-primary: 190 100% 50%;
+  --sidebar-border: 217 44% 20%;
+  --font-mono: var(--font-geist-mono);
+  --font-ui: var(--font-ibm-plex), var(--font-geist-sans);
+  --font-heading: var(--font-barlow), var(--font-geist-sans);
+  --text-dim: #475569;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --cyan: #38bdf8;
+  --green: #10b981;
+  --red: #ef4444;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-hip-critical: hsl(var(--hip-critical));
+  --color-hip-high: hsl(var(--hip-high));
+  --color-hip-medium: hsl(var(--hip-medium));
+  --color-hip-low: hsl(var(--hip-low));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes hipPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes hipGlow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Homepage + App: NGO surveillance — black/white palette */
+.landing-page {
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --primary: 0 0% 100%;
+  --primary-foreground: 0 0% 4%;
+  --accent: 0 0% 15%;
+  --accent-foreground: 0 0% 98%;
+  --muted: 0 0% 45%;
+  --muted-foreground: 0 0% 65%;
+  --border: 0 0% 18%;
+  --card: 0 0% 6%;
+  --popover: 0 0% 10%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+.font-heading {
+  font-family: var(--font-heading), system-ui, sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+/* Governmental font — Public Sans (US Web Design System) */
+.font-gov {
+  font-family: var(--font-public-sans), system-ui, sans-serif;
+}
+
+/* Impact font — Archivo (strong, industrial) */
+.font-impact {
+  font-family: var(--font-archivo), system-ui, sans-serif;
 }
