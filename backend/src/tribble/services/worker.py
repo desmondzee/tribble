@@ -58,6 +58,8 @@ def _build_pipeline_state(report: dict) -> dict:
         "cluster_id": None,
         "report_type": None,
         "validation_context": None,
+        "corroboration_score": None,
+        "corroboration_acled_classes": None,
     }
 
 

@@ -30,6 +30,8 @@ def _state(**kw) -> PipelineState:
         "cluster_id": None,
         "report_type": None,
         "validation_context": None,
+        "corroboration_score": None,
+        "corroboration_acled_classes": None,
     }
     base.update(kw)
     return base
@@ -140,3 +142,46 @@ def test_enrich_weather_without_data():
     result = enrich_weather(s)
     assert result["status"] == PipelineStatus.WEATHER_ENRICHED
     assert result["weather_data"] is None or result["weather_data"].get("flood_risk", 0) == 0
+
+
+def test_score_uses_real_source_prior():
+    s = _state(
+        raw_narrative="Water shortage reported in area for many days now",
+        source_type="acled_historical",
+    )
+    result = build_pipeline().invoke(s)
+    assert result["confidence_breakdown"]["source_prior"] == 0.95  # not hardcoded 0.5
+
+
+def test_score_uses_corroboration_data():
+    s = _state(
+        raw_narrative="Heavy shelling reported near the market area",
+        source_type="web_identified",
+        corroboration_hits=[
+            {"source": "acled", "severity": "critical", "distance_km": 1.0},
+        ],
+    )
+    result = build_pipeline().invoke(s)
+    assert result["confidence_breakdown"]["cross_source_corroboration"] > 0.0
+
+
+def test_score_completeness_long_narrative():
+    s = _state(
+        raw_narrative="This is a detailed report about the situation. " * 7,  # >50 words
+        source_type="web_identified",
+    )
+    result = build_pipeline().invoke(s)
+    assert result["confidence_breakdown"]["completeness_score"] >= 0.8
+
+
+def test_score_builds_validation_context():
+    s = _state(
+        raw_narrative="Water station destroyed no clean water",
+        report_type="water_need",
+        source_type="web_identified",
+    )
+    result = build_pipeline().invoke(s)
+    assert result.get("validation_context") is not None
+    assert "satellite" in result["validation_context"]
+    assert "weather" in result["validation_context"]
+    assert "acled" in result["validation_context"]

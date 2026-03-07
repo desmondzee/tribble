@@ -5,7 +5,7 @@ from typing import Literal
 
 from langgraph.graph import END, START, StateGraph
 
-from tribble.models.confidence import compute_access_difficulty
+from tribble.models.confidence import ConfidenceBreakdown, SOURCE_PRIORS, compute_access_difficulty
 from tribble.pipeline.state import PipelineState, PipelineStatus
 from tribble.services.satellite_fusion import fuse_satellite_weather_report_signals
 
@@ -242,38 +242,168 @@ def enrich_satellite(state: PipelineState) -> dict:
     }
 
 
+EL_FASHER_BBOX = {"lat_min": 13.3, "lat_max": 14.0, "lon_min": 24.8, "lon_max": 26.0}
+
+SATELLITE_VALIDATION = {
+    "water_need": {"index": "ndwi", "direction": "declining", "label": "NDWI decline indicates water body recession"},
+    "food_need": {"index": "ndvi", "direction": "declining", "label": "NDVI decline indicates vegetation stress", "min_baseline": 0.25},
+    "infrastructure_damage": {"index": "change_score", "direction": "rising", "label": "Change detection suggests structural damage"},
+    "shelter_need": {"index": "ndwi", "direction": "rising", "label": "NDWI rise indicates flooding of built areas"},
+}
+
+WEATHER_VALIDATION = {
+    "water_need": {"risk": "precipitation_mm", "check": "low", "threshold": 5.0, "label": "Low precipitation confirms water scarcity"},
+    "shelter_need": {"risk": "storm_risk", "check": "high", "threshold": 0.5, "label": "Storm risk confirms shelter need"},
+    "displacement": {"risk": "flood_risk", "check": "high", "threshold": 0.5, "label": "Flood risk supports displacement reports"},
+    "aid_blocked": {"risk": "route_disruption_risk", "check": "high", "threshold": 0.4, "label": "Route disruption confirms access difficulty"},
+    "food_need": {"risk": "precipitation_mm", "check": "low", "threshold": 5.0, "label": "Drought conditions support food insecurity"},
+}
+
+
+def _build_validation_context(state: PipelineState) -> dict:
+    report_type = state.get("report_type") or ""
+    sat_data = state.get("satellite_data") or {}
+    weather = state.get("weather_data") or {}
+    hits = state.get("corroboration_hits") or []
+    corr_classes = state.get("corroboration_acled_classes")
+
+    context: dict = {}
+
+    # Satellite validation
+    sat_rule = SATELLITE_VALIDATION.get(report_type)
+    if sat_rule:
+        index_key = sat_rule["index"]
+        value = float(sat_data.get(index_key, 0.0))
+        min_baseline = sat_rule.get("min_baseline")
+        if min_baseline and float(sat_data.get("ndvi_baseline", 0.0)) < min_baseline:
+            context["satellite"] = {"confirmed": False, "signal": "Arid region — satellite vegetation signal not meaningful", "confidence": 0.0}
+        else:
+            confirmed = (value < 0 if sat_rule["direction"] == "declining" else value > 0.15)
+            context["satellite"] = {"confirmed": confirmed, "signal": sat_rule["label"], "confidence": min(abs(value), 1.0) if confirmed else 0.0}
+    else:
+        context["satellite"] = {"confirmed": False, "signal": "Satellite cannot directly validate this report type", "confidence": 0.0}
+
+    # Weather validation
+    wx_rule = WEATHER_VALIDATION.get(report_type)
+    if wx_rule and weather:
+        value = float(weather.get(wx_rule["risk"], 0.0))
+        if wx_rule["check"] == "low":
+            confirmed = value < wx_rule["threshold"]
+        else:
+            confirmed = value > wx_rule["threshold"]
+        context["weather"] = {"confirmed": confirmed, "signal": wx_rule["label"], "confidence": 0.7 if confirmed else 0.0}
+    else:
+        context["weather"] = {"confirmed": False, "signal": "No weather validation for this report type", "confidence": 0.0}
+
+    # ACLED validation
+    acled_hits = [h for h in hits if h.get("source") == "acled"]
+    if corr_classes and acled_hits:
+        best = max(acled_hits, key=lambda h: {"critical": 4, "high": 3, "medium": 2, "low": 1}.get(h.get("severity", "low"), 0))
+        context["acled"] = {
+            "confirmed": True,
+            "signal": f"ACLED {best.get('severity', '')} event within {best.get('distance_km', '?')}km",
+            "confidence": min(compute_corroboration_score(acled_hits), 1.0),
+        }
+    elif corr_classes is None:
+        context["acled"] = {"confirmed": False, "signal": "ACLED cannot validate this report type", "confidence": 0.0}
+    else:
+        context["acled"] = {"confirmed": False, "signal": "No matching ACLED events nearby", "confidence": 0.0}
+
+    return context
+
+
 @_safe_node
 def score(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["score"]
+
+    # Real source prior
+    source_type = state.get("source_type") or "web_anonymous"
+    source_prior = SOURCE_PRIORS.get(source_type, 0.5)
+
+    # Completeness from word count
+    word_count = len((state.get("raw_narrative") or "").split())
+    if word_count > 50:
+        completeness = 0.8
+    elif word_count > 20:
+        completeness = 0.6
+    else:
+        completeness = 0.4
+
+    # Geospatial consistency
+    lat = state.get("latitude", 0.0)
+    lon = state.get("longitude", 0.0)
+    in_bbox = (
+        EL_FASHER_BBOX["lat_min"] <= lat <= EL_FASHER_BBOX["lat_max"]
+        and EL_FASHER_BBOX["lon_min"] <= lon <= EL_FASHER_BBOX["lon_max"]
+    )
+    geospatial = 0.8 if in_bbox else 0.4
+
+    # Cross-source corroboration from corroborate node
+    corroboration = float(state.get("corroboration_score", 0.0))
+
+    # Weather plausibility
+    weather = state.get("weather_data") or {}
+    weather_plausibility = 0.5  # neutral default
+    report_type = state.get("report_type") or ""
+    if weather:
+        flood_risk = float(weather.get("flood_risk", 0.0))
+        if report_type in ("water_need", "food_need") and flood_risk < 0.2:
+            weather_plausibility = 0.7
+        elif report_type in ("displacement", "shelter_need") and flood_risk > 0.5:
+            weather_plausibility = 0.8
+        elif report_type in ("shelling", "gunfire"):
+            weather_plausibility = 0.5
+
+    # Satellite corroboration from enrich_satellite
+    sat_data = state.get("satellite_data") or {}
+    satellite_corr = float(sat_data.get("quality_score", 0.0)) * 0.5
+
+    # Fusion
     fusion = fuse_satellite_weather_report_signals(
         satellite=state.get("satellite_data"),
         weather=state.get("weather_data"),
-        reports={"cross_source_corroboration": 0.5},
+        reports={"cross_source_corroboration": corroboration},
     )
-    satellite_corroboration = float(fusion["alert_score"])
-    weather_risk = float((state.get("weather_data") or {}).get("flood_risk", 0.3))
-    access_difficulty = compute_access_difficulty(weather_risk, satellite_corroboration)
+    satellite_alert_score = float(fusion["alert_score"])
+    if satellite_corr < satellite_alert_score:
+        satellite_corr = satellite_alert_score
+
+    weather_risk = float(weather.get("flood_risk", 0.3))
+    access_difficulty = compute_access_difficulty(weather_risk, satellite_corr)
+
+    breakdown = ConfidenceBreakdown(
+        source_prior=source_prior,
+        spam_score=0.05,
+        duplication_score=0.0,
+        completeness_score=completeness,
+        geospatial_consistency=geospatial,
+        temporal_consistency=0.7,
+        cross_source_corroboration=corroboration,
+        weather_plausibility=weather_plausibility,
+        satellite_corroboration=satellite_corr,
+    )
+    publishability = breakdown.compute_publishability()
+
+    # Urgency from classification
+    classification = state.get("classification") or {}
+    urgency_hint = classification.get("urgency_hint", "medium")
+    urgency_map = {"critical": 0.95, "high": 0.75, "medium": 0.5, "low": 0.25}
+    urgency = urgency_map.get(urgency_hint, 0.5)
+
+    # Validation context
+    validation_context = _build_validation_context(state)
 
     return {
         "status": PipelineStatus.SCORED,
         "node_trace": trace,
         "satellite_alert": fusion,
-        "confidence_breakdown": {
-            "source_prior": 0.5,
-            "spam_score": 0.05,
-            "duplication_score": 0.0,
-            "completeness_score": 0.5,
-            "geospatial_consistency": 0.5,
-            "temporal_consistency": 0.5,
-            "cross_source_corroboration": 0.0,
-            "weather_plausibility": 0.5,
-            "satellite_corroboration": satellite_corroboration,
-        },
+        "confidence_breakdown": breakdown.model_dump(),
         "confidence_scores": {
-            "publishability": 0.5,
-            "urgency": 0.5,
+            "publishability": publishability,
+            "urgency": urgency,
             "access_difficulty": access_difficulty,
         },
+        "validation_context": validation_context,
     }
 
 

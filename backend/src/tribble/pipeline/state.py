@@ -46,3 +46,5 @@ class PipelineState(TypedDict):
     cluster_id: str | None
     report_type: str | None
     validation_context: dict | None
+    corroboration_score: float | None
+    corroboration_acled_classes: list[str] | None
