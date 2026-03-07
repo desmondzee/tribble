@@ -3,6 +3,21 @@ import httpx
 from tribble.services.llm_provider import LLMResult
 
 
+def get_zai_provider():
+    """Return a ZAIProvider when Z.ai is enabled and configured, else None.
+    Caller should use stub/fallback when None so the system is never forced to use Z.ai.
+    """
+    from tribble.config import get_settings
+    s = get_settings()
+    if not s.enable_zai or not (s.zai_api_key or "").strip():
+        return None
+    return ZAIProvider(
+        api_key=s.zai_api_key,
+        model=s.zai_model,
+        base_url=s.zai_base_url,
+    )
+
+
 class ZAIProvider:
     def __init__(self, api_key: str, model: str, base_url: str, timeout_s: float = 15.0):
         self.api_key = api_key

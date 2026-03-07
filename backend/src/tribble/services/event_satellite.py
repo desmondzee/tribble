@@ -44,10 +44,12 @@ Event: {event_category} at {location_summary} (event date: {event_date}). Things
 Satellite snapshots (acquisition date -> vision scores/labels):
 {snapshots_text}
 
-Does this event likely affect aid response (yes/no/uncertain)? Is infrastructure or other relevant aspects still present, damaged, or changed over time? Reply with JSON only:
+Reply with JSON only:
 - "affects_aid_response": "yes" | "no" | "uncertain"
 - "infrastructure_note": one sentence
 - "summary": 1-2 sentences
+- "problems": short list or paragraph of key problems (e.g. access, infrastructure, safety) implied by the event and satellite context
+- "realistic_solutions": short list or paragraph of realistic, actionable solutions or recommendations for responders
 - "snapshot_notes": optional object with one sentence per period label (e.g. "before", "at_event", "after")"""
 
 
@@ -280,6 +282,8 @@ async def synthesize_aid_impact(
             "affects_aid_response": "uncertain",
             "infrastructure_note": "No satellite analysis available.",
             "summary": "",
+            "problems": "",
+            "realistic_solutions": "",
             "snapshot_notes": {},
         }
 
@@ -310,6 +314,8 @@ async def synthesize_aid_impact(
             "affects_aid_response": "uncertain",
             "infrastructure_note": "Synthesis unavailable.",
             "summary": "",
+            "problems": "",
+            "realistic_solutions": "",
             "snapshot_notes": {},
         }
 
@@ -319,6 +325,8 @@ async def synthesize_aid_impact(
             "affects_aid_response": "uncertain",
             "infrastructure_note": "",
             "summary": (result.text or "")[:500],
+            "problems": "",
+            "realistic_solutions": "",
             "snapshot_notes": {},
         }
 
@@ -330,6 +338,8 @@ async def synthesize_aid_impact(
         "affects_aid_response": data.get("affects_aid_response", "uncertain"),
         "infrastructure_note": str(data.get("infrastructure_note", ""))[:500],
         "summary": str(data.get("summary", ""))[:1000],
+        "problems": str(data.get("problems", ""))[:1500],
+        "realistic_solutions": str(data.get("realistic_solutions", ""))[:1500],
         "snapshot_notes": snapshot_notes,
     }
 

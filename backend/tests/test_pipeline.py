@@ -5,6 +5,7 @@ from tribble.pipeline.graph import (
     corroborate,
     enrich_weather,
     fetch_weather,
+    translate,
     verify_extract,
     ACLED_CORROBORATION_MAP,
     compute_corroboration_score,
@@ -276,3 +277,72 @@ def test_verify_extract_keyword_fallback_sets_report_type():
     assert result["report_type"] == "water_need"
     assert result["llm_verification"]["provider"] == "keyword_fallback"
     assert result["llm_verification"]["report_type"] == "water_need"
+
+
+def test_translate_non_en_stub_when_zai_disabled():
+    """When Z.ai is disabled (default), non-English narrative is passed through as translation stub."""
+    s = _state(language="ar", raw_narrative="هناك قصف قرب المطار")
+    result = translate(s)
+    assert result["status"] == "translated"
+    assert result["translation"] == "هناك قصف قرب المطار"
+
+
+def test_translate_en_returns_none():
+    s = _state(language="en", raw_narrative="Heavy shelling near airport")
+    result = translate(s)
+    assert result["translation"] is None
+
+
+def test_translate_uses_zai_when_enabled(monkeypatch):
+    from tribble.services.llm_provider import LLMResult
+
+    async def mock_generate(prompt: str, stream: bool = False):
+        return LLMResult(status="ok", provider="zai", model="glm-4", text="Translated to English")
+
+    class MockProvider:
+        generate = mock_generate
+
+    monkeypatch.setattr(
+        "tribble.pipeline.graph.get_zai_provider",
+        lambda: MockProvider(),
+    )
+    s = _state(language="ar", raw_narrative="هناك قصف")
+    result = translate(s)
+    assert result["translation"] == "Translated to English"
+
+
+def test_classify_help_categories_empty_when_zai_disabled():
+    """When Z.ai is disabled, help_categories stay empty; crisis_categories from report_type."""
+    s = _state(raw_narrative="Medical supplies needed", report_type="medical_need")
+    result = classify(s)
+    assert result["classification"]["crisis_categories"] == ["health"]
+    assert result["classification"]["help_categories"] == []
+
+
+def test_classify_uses_zai_when_enabled(monkeypatch):
+    from tribble.services.llm_provider import LLMResult
+
+    async def mock_generate(prompt: str, stream: bool = False):
+        return LLMResult(
+            status="ok",
+            provider="zai",
+            model="glm-4",
+            text='{"crisis_categories": ["security", "health"], "help_categories": ["medical_aid"]}',
+        )
+
+    class MockProvider:
+        generate = mock_generate
+
+    monkeypatch.setattr(
+        "tribble.pipeline.graph.get_zai_provider",
+        lambda: MockProvider(),
+    )
+    s = _state(
+        raw_narrative="People injured in shelling, need medical help",
+        report_type="shelling",
+        translation="People injured in shelling, need medical help",
+    )
+    result = classify(s)
+    assert "security" in result["classification"]["crisis_categories"]
+    assert "health" in result["classification"]["crisis_categories"]
+    assert result["classification"]["help_categories"] == ["medical_aid"]

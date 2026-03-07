@@ -2,10 +2,11 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageSquare, Bot } from "lucide-react";
 import type { Map as MapboxMap, FillLayer, LineLayer } from "mapbox-gl";
 import Map, {
   Marker,
+  Popup,
   Source,
   Layer,
   NavigationControl,
@@ -21,6 +22,14 @@ import {
 } from "@/data/mapData";
 import { useData } from "@/context/DataContext";
 import { useUIStore } from "@/store/uiSlice";
+import {
+  getEventSatelliteResults,
+  runEventSatelliteAnalysis,
+  getSatellitePreviewUrl,
+  type EventSatelliteResult,
+  type NewsEvent,
+} from "@/lib/api";
+import type { HipEvent } from "@/types";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -128,6 +137,15 @@ const BOUNDARIES_LINE_PAINT = {
 
 const DEFAULT_VIEW = { longitude: 30.5, latitude: 7.0, zoom: 5.5 };
 
+function timeSince(ts: string | null): string {
+  if (!ts) return "—";
+  const mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+  if (mins < 0) return "now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+  return `${Math.floor(mins / 1440)}d ago`;
+}
+
 export default function LiveMap() {
   const { clusters, zones, boundaries, events, ngoZones, routes, geolocationEvents, newsEvents, newestEventIds } = useData();
   const {
@@ -139,7 +157,89 @@ export default function LiveMap() {
     locationPickMode,
     setLocationPickMode,
     rightPanelOpen,
+    selectedEventId,
+    selectedNewsEventId,
   } = useUIStore();
+
+  const [popupSatelliteResult, setPopupSatelliteResult] = useState<EventSatelliteResult | null>(null);
+  const [popupSatelliteLoading, setPopupSatelliteLoading] = useState(false);
+  const [popupAnalysisLoading, setPopupAnalysisLoading] = useState(false);
+  const [popupSatelliteError, setPopupSatelliteError] = useState<string | null>(null);
+  const [popupHeliosOverviewOpen, setPopupHeliosOverviewOpen] = useState(false);
+
+  const popupEvent = useMemo((): (NewsEvent | HipEvent) | null => {
+    if (selectedNewsEventId) {
+      const ev = newsEvents.find((e) => e.id === selectedNewsEventId);
+      if (ev && ev.lat != null && ev.lng != null) return ev;
+    }
+    if (selectedEventId) {
+      return events.find((e) => e.id === selectedEventId) ?? null;
+    }
+    return null;
+  }, [selectedNewsEventId, selectedEventId, newsEvents, events]);
+
+  const popupLat = popupEvent == null ? null : "headline" in popupEvent ? (popupEvent as NewsEvent).lat ?? null : (popupEvent as HipEvent).lat;
+  const popupLng = popupEvent == null ? null : "headline" in popupEvent ? (popupEvent as NewsEvent).lng ?? null : (popupEvent as HipEvent).lng;
+  const popupHasCoords = popupLat != null && popupLng != null;
+  const popupEventId = popupEvent?.id ?? null;
+
+  useEffect(() => {
+    if (!popupEventId || !popupHasCoords) {
+      setPopupSatelliteResult(null);
+      setPopupSatelliteError(null);
+      setPopupHeliosOverviewOpen(false);
+      return;
+    }
+    let cancelled = false;
+    setPopupSatelliteError(null);
+    setPopupSatelliteLoading(true);
+    getEventSatelliteResults([popupEventId])
+      .then((data) => {
+        if (cancelled) return;
+        const first = data.results.find((r) => r.event_id === popupEventId);
+        setPopupSatelliteResult(first ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) setPopupSatelliteError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setPopupSatelliteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [popupEventId, popupHasCoords]);
+
+  const runPopupAnalysis = useCallback(async () => {
+    if (!popupEvent || !popupHasCoords) return;
+    setPopupSatelliteError(null);
+    setPopupAnalysisLoading(true);
+    try {
+      const payload =
+        "headline" in popupEvent
+          ? {
+              id: popupEvent.id,
+              headline: popupEvent.headline,
+              lat: (popupEvent as NewsEvent).lat,
+              lng: (popupEvent as NewsEvent).lng,
+              timestamp: (popupEvent as NewsEvent).timestamp ?? undefined,
+            }
+          : {
+              id: popupEvent.id,
+              headline: (popupEvent as HipEvent).description || (popupEvent as HipEvent).location_name,
+              lat: (popupEvent as HipEvent).lat,
+              lng: (popupEvent as HipEvent).lng,
+              timestamp: (popupEvent as HipEvent).timestamp,
+            };
+      const data = await runEventSatelliteAnalysis([payload]);
+      const first = data.results.find((r) => r.event_id === popupEvent.id) ?? data.results[0];
+      if (first) setPopupSatelliteResult(first);
+    } catch (err) {
+      setPopupSatelliteError(err instanceof Error ? err.message : "Analysis failed");
+    } finally {
+      setPopupAnalysisLoading(false);
+    }
+  }, [popupEvent, popupHasCoords]);
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     clusters: true,
@@ -527,6 +627,7 @@ export default function LiveMap() {
                 isNewest={newestEventIds.has(evt.id)}
                 onClick={() => {
                   setSelectedEventId(evt.id);
+                  setSelectedNewsEventId(null);
                   setRightPanelOpen(true);
                   setRightPanelTab("news_feed");
                 }}
@@ -584,6 +685,138 @@ export default function LiveMap() {
               </Marker>
             );
           })}
+        {popupEvent && popupLat != null && popupLng != null && (
+          <Popup
+            longitude={popupLng}
+            latitude={popupLat}
+            anchor="bottom"
+            closeButton
+            closeOnClick={false}
+            onClose={() => {
+              setSelectedNewsEventId(null);
+              setSelectedEventId(null);
+            }}
+            className="event-popup-speech-bubble"
+            maxWidth="320px"
+          >
+            <div className="rounded-lg bg-popover border border-border shadow-lg p-3 min-w-[200px] max-w-[300px]">
+              <p className="font-mono text-[9px] tracking-wider text-primary mb-1.5">EVENT</p>
+              <p className="text-[11px] font-medium text-foreground leading-tight line-clamp-2">
+                {"headline" in popupEvent ? popupEvent.headline : (popupEvent as HipEvent).location_name}
+              </p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-0.5">
+                {"source" in popupEvent ? popupEvent.source : (popupEvent as HipEvent).source_label}
+              </p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-0.5">
+                {timeSince("timestamp" in popupEvent ? (popupEvent as NewsEvent).timestamp : (popupEvent as HipEvent).timestamp)} · {popupLat.toFixed(2)}, {popupLng.toFixed(2)}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  className="font-mono text-[9px] px-2 py-1 rounded border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                  onClick={() => {
+                    setRightPanelOpen(true);
+                    setRightPanelTab("news_feed");
+                  }}
+                >
+                  Open in feed
+                </button>
+                {popupHasCoords && (
+                  <button
+                    type="button"
+                    onClick={runPopupAnalysis}
+                    disabled={popupAnalysisLoading || popupSatelliteLoading}
+                    className="font-mono text-[9px] px-2 py-1 rounded border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {popupAnalysisLoading || popupSatelliteLoading ? (
+                      <span className="animate-pulse">Loading...</span>
+                    ) : (
+                      <>Get satellite & analyse</>
+                    )}
+                  </button>
+                )}
+              </div>
+              {popupSatelliteError && (
+                <p className="font-mono text-[8px] text-destructive mt-2">{popupSatelliteError}</p>
+              )}
+              {popupSatelliteResult && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  {popupSatelliteResult.snapshots.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[7px] tracking-wider text-muted-foreground mb-1">SATELLITE</p>
+                      <div className="flex gap-1 overflow-x-auto">
+                        {popupSatelliteResult.snapshots.map((snap) => (
+                          <div key={snap.period_label} className="flex-shrink-0 w-14">
+                            <img
+                              src={snap.scene_id ? getSatellitePreviewUrl(snap.scene_id) : snap.image_url}
+                              alt={snap.period_label}
+                              className="w-14 h-14 object-cover rounded border border-border"
+                            />
+                            <p className="font-mono text-[6px] text-muted-foreground truncate">{snap.period_label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {popupSatelliteResult.aid_impact && (
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setPopupHeliosOverviewOpen((o) => !o)}
+                        className="flex items-center gap-1.5 w-full text-left font-mono text-[7px] tracking-wider text-primary hover:text-primary/80"
+                        aria-expanded={popupHeliosOverviewOpen}
+                      >
+                        <Bot className="w-2.5 h-2.5 flex-shrink-0" />
+                        HELIOS AI overview
+                        {popupHeliosOverviewOpen ? (
+                          <ChevronUp className="w-2.5 h-2.5 ml-auto flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-2.5 h-2.5 ml-auto flex-shrink-0" />
+                        )}
+                      </button>
+                      {popupHeliosOverviewOpen && (
+                        <div className="pl-4 space-y-1 border-l-2 border-primary/20">
+                          {popupSatelliteResult.aid_impact.summary && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Brief description</p>
+                              <p className="text-[9px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.summary}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.problems && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">What to watch out for</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.problems}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.infrastructure_note && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Infrastructure</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.infrastructure_note}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.realistic_solutions && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Realistic solutions</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.realistic_solutions}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Popup>
+        )}
       </Map>
 
       <div className="map-hud-overlay">

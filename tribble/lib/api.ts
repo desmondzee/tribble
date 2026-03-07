@@ -304,6 +304,92 @@ export function getSatellitePreviewUrl(sceneId: string, collection = "sentinel-2
   return `${apiUrl("/api/satellite/preview")}?${params.toString()}`;
 }
 
+// ── Event satellite analysis (feed / Inspect) ───────────────────────────────
+
+export interface EventSatelliteSnapshot {
+  period_label: string;
+  acquisition_date: string;
+  image_url: string;
+  scene_id?: string;
+  satellite_analysis?: Record<string, unknown>;
+}
+
+export interface EventSatelliteAidImpact {
+  affects_aid_response?: "yes" | "no" | "uncertain";
+  infrastructure_note?: string;
+  summary?: string;
+  problems?: string;
+  realistic_solutions?: string;
+  snapshot_notes?: Record<string, string>;
+}
+
+export interface EventSatelliteResult {
+  event_id: string | null;
+  parsed_event?: Record<string, unknown>;
+  snapshots: EventSatelliteSnapshot[];
+  aid_impact: EventSatelliteAidImpact | null;
+  summary?: string;
+  created_at?: string;
+}
+
+export interface EventSatelliteResultsResponse {
+  results: EventSatelliteResult[];
+}
+
+export async function getEventSatelliteResults(eventIds: string[]): Promise<EventSatelliteResultsResponse> {
+  if (eventIds.length === 0) return { results: [] };
+  const sp = new URLSearchParams({ event_ids: eventIds.join(",") });
+  const url = `${apiUrl("/api/analysis/event-satellite")}?${sp}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/analysis/event-satellite returned ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface EventSatelliteRunResponse {
+  results: EventSatelliteResult[];
+}
+
+/** Event payload for run: id, lat, lng, and narrative/headline + timestamp. */
+export async function runEventSatelliteAnalysis(
+  events: Array<{
+    id: string;
+    headline: string;
+    source?: string;
+    severity?: string;
+    timestamp?: string | null;
+    lat: number | null;
+    lng: number | null;
+    event_type?: string | null;
+  }>
+): Promise<EventSatelliteRunResponse> {
+  const eventsWithCoords = events.filter((e) => e.lat != null && e.lng != null).map((e) => ({
+    id: e.id,
+    lat: e.lat as number,
+    lng: e.lng as number,
+    narrative: e.headline,
+    timestamp: e.timestamp ?? undefined,
+    event_timestamp: e.timestamp ?? undefined,
+    ontology_class: e.event_type ?? undefined,
+  }));
+  if (eventsWithCoords.length === 0) {
+    throw new Error("No events with coordinates to analyse");
+  }
+  const url = apiUrl("/api/analysis/event-satellite");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ events_with_coords: eventsWithCoords, persist: true }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `API /api/analysis/event-satellite returned ${res.status}`);
+  }
+  return res.json();
+}
+
 // ── Route suggestion (maps agent) ───────────────────────────────────────────
 
 export interface RouteSuggestParams {

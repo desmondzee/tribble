@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 from functools import wraps
 from typing import Literal
@@ -8,6 +10,7 @@ from tribble.config import get_settings
 from tribble.models.confidence import ConfidenceBreakdown, SOURCE_PRIORS, compute_access_difficulty
 from tribble.pipeline.state import PipelineState, PipelineStatus
 from tribble.services.satellite_fusion import fuse_satellite_weather_report_signals
+from tribble.services.zai_provider import get_zai_provider
 from tribble.utils.geo import haversine_km
 
 logger = logging.getLogger(__name__)
@@ -63,8 +66,25 @@ def normalize(state: PipelineState) -> dict:
 @_safe_node
 def translate(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["translate"]
-    t = None if state.get("language") == "en" else state["raw_narrative"]
-    return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": t}
+    lang = state.get("language") or "en"
+    raw = state.get("raw_narrative") or ""
+
+    if lang == "en":
+        return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": None}
+
+    provider = get_zai_provider()
+    if provider is None:
+        return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": raw}
+
+    prompt = (
+        "Translate the following crisis report to English. "
+        "Output only the translation, no preamble or explanation.\n\n"
+    )
+    prompt += raw[:4000]
+    result = asyncio.run(provider.generate(prompt))
+    if result.status == "ok" and result.text:
+        return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": result.text.strip()}
+    return {"status": PipelineStatus.TRANSLATED, "node_trace": trace, "translation": raw}
 
 
 REPORT_TYPE_CATEGORIES: dict[str, list[str]] = {
@@ -173,13 +193,48 @@ SEVERITY_URGENCY: dict[str, str] = {
 def classify(state: PipelineState) -> dict:
     trace = state["node_trace"] + ["classify"]
     report_type = state.get("report_type") or ""
+    narrative = (state.get("translation") or state.get("raw_narrative") or "").strip()
     categories = list(REPORT_TYPE_CATEGORIES.get(report_type, []))
+    help_cats: list[str] = []
 
-    narrative = state.get("raw_narrative") or ""
+    provider = get_zai_provider()
+    if provider is not None and narrative:
+        prompt = (
+            "From this crisis report narrative, extract two lists. Reply with only valid JSON in this exact shape: "
+            '{"crisis_categories": ["category1", ...], "help_categories": ["help1", ...]}. '
+            "Use only these crisis_categories when applicable: security, food, water_sanitation, health, shelter, "
+            "displacement, infrastructure, access. Use only these help_categories when applicable: food_aid, water_aid, "
+            "medical_aid, shelter_aid, protection, logistics. If none apply use empty arrays. Narrative:\n\n"
+        )
+        prompt += narrative[:3000]
+        result = asyncio.run(provider.generate(prompt))
+        if result.status == "ok" and result.text:
+            text = result.text.strip()
+            if "```" in text:
+                parts = text.split("```")
+                for part in parts:
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    if part.startswith("{"):
+                        text = part
+                        break
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    cr = parsed.get("crisis_categories")
+                    hc = parsed.get("help_categories")
+                    if isinstance(cr, list):
+                        categories = [str(x) for x in cr if x]
+                    if isinstance(hc, list):
+                        help_cats = [str(x) for x in hc if x]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     severity_hints = ["critical", "high", "medium", "low"]
     urgency = "medium"
     for hint in severity_hints:
-        if hint in narrative.lower():
+        if hint in (narrative or state.get("raw_narrative") or "").lower():
             urgency = SEVERITY_URGENCY[hint]
             break
 
@@ -188,7 +243,7 @@ def classify(state: PipelineState) -> dict:
         "node_trace": trace,
         "classification": {
             "crisis_categories": categories,
-            "help_categories": [],
+            "help_categories": help_cats if provider else [],
             "urgency_hint": urgency,
         },
     }

@@ -9,6 +9,7 @@ class SourceType(StrEnum):
     WEB_ANONYMOUS = "web_anonymous"
     WHATSAPP_IDENTIFIED = "whatsapp_identified"
     WHATSAPP_ANONYMOUS = "whatsapp_anonymous"
+    DISCORD_ANONYMOUS = "discord_anonymous"
     ACLED_HISTORICAL = "acled_historical"
     SATELLITE = "satellite"
     WEATHER = "weather"

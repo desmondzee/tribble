@@ -93,6 +93,8 @@ async def test_synthesize_aid_impact_no_snapshots_returns_uncertain():
     assert out["affects_aid_response"] == "uncertain"
     assert "infrastructure_note" in out
     assert "snapshot_notes" in out
+    assert "problems" in out
+    assert "realistic_solutions" in out
 
 
 @pytest.mark.asyncio
@@ -123,6 +125,8 @@ async def test_synthesize_aid_impact_mocked_claude():
                         "affects_aid_response": "yes",
                         "infrastructure_note": "Damage visible in post-event snapshot.",
                         "summary": "Event likely affects aid delivery.",
+                        "problems": "Road damage; access restricted.",
+                        "realistic_solutions": "Use alternate route; coordinate with local actors.",
                         "snapshot_notes": {"before": "Intact.", "after": "Damage visible."},
                     }),
                 )
@@ -138,6 +142,8 @@ async def test_synthesize_aid_impact_mocked_claude():
             )
     assert out["affects_aid_response"] == "yes"
     assert "Damage visible" in out["infrastructure_note"]
+    assert out["problems"] == "Road damage; access restricted."
+    assert "alternate route" in out["realistic_solutions"]
     assert out["snapshot_notes"].get("before") == "Intact."
     assert out["snapshot_notes"].get("after") == "Damage visible."
 

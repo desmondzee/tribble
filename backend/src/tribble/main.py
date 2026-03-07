@@ -15,6 +15,7 @@ from tribble.api.analysis import router as analysis_router
 from tribble.api.pipeline import router as pipeline_router
 from tribble.api.news import router as news_router
 from tribble.api.helios import router as helios_router
+from tribble.api.intake import router as intake_router
 from tribble.api.satellite import router as satellite_router
 from tribble.api.weather import router as weather_router
 from tribble.config import get_settings
@@ -35,6 +36,7 @@ app.include_router(analysis_router)
 app.include_router(pipeline_router)
 app.include_router(news_router)
 app.include_router(helios_router)
+app.include_router(intake_router)
 app.include_router(satellite_router)
 app.include_router(weather_router)
 

@@ -7,8 +7,19 @@ from pydantic import BaseModel, Field
 from tribble.config import get_settings
 from tribble.db import get_supabase
 from tribble.services.anthropic_provider import AnthropicProvider
+from tribble.services.gemini_provider import GeminiProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _get_helios_provider() -> AnthropicProvider | GeminiProvider | None:
+    """Return Anthropic if configured, else Gemini if configured, else None."""
+    settings = get_settings()
+    if (settings.anthropic_api_key or "").strip():
+        return AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
+    if (settings.gemini_api_key or "").strip():
+        return GeminiProvider(api_key=settings.gemini_api_key, model=settings.gemini_model)
+    return None
 
 router = APIRouter(prefix="/api/helios", tags=["helios"])
 
@@ -240,9 +251,8 @@ def _format_events_for_summary(events: list[SummarizeEventItem]) -> str:
 
 @router.post("/chat", response_model=ChatResponse)
 async def helios_chat(req: ChatRequest):
-    settings = get_settings()
-
-    if not settings.anthropic_api_key:
+    provider = _get_helios_provider()
+    if provider is None:
         raise HTTPException(503, "HELIOS AI is not configured")
 
     if ROUTING_KEYWORDS.search(req.message):
@@ -257,13 +267,12 @@ async def helios_chat(req: ChatRequest):
         prompt = prompt.rstrip() + "\n" + CIVILIAN_OVERVIEW_INSTRUCTIONS
     prompt = prompt + f"\n\n## User Question\n{req.message}"
 
-    provider = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
     result = await provider.generate(prompt)
 
     if result.status == "disabled":
         raise HTTPException(503, "HELIOS AI is not configured")
     if result.status == "unavailable":
-        logger.error("Claude failed: %s", result.error)
+        logger.error("HELIOS LLM failed: %s", result.error)
         raise HTTPException(502, "HELIOS AI is temporarily unavailable")
 
     return ChatResponse(reply=result.text)
@@ -271,20 +280,19 @@ async def helios_chat(req: ChatRequest):
 
 @router.post("/summarize", response_model=ChatResponse)
 async def helios_summarize(req: SummarizeRequest):
-    settings = get_settings()
-    if not settings.anthropic_api_key:
+    provider = _get_helios_provider()
+    if provider is None:
         raise HTTPException(503, "Events summary is not configured")
 
     events_block = _format_events_for_summary(req.events)
     prompt = SUMMARIZE_SYSTEM + "\n\n## Nearby events\n" + events_block + "\n\n## User question\n" + req.message
 
-    provider = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
     result = await provider.generate(prompt)
 
     if result.status == "disabled":
         raise HTTPException(503, "Events summary is not configured")
     if result.status == "unavailable":
-        logger.error("Claude summarize failed: %s", result.error)
+        logger.error("HELIOS summarize failed: %s", result.error)
         raise HTTPException(502, "Events summary is temporarily unavailable")
 
     return ChatResponse(reply=result.text)
