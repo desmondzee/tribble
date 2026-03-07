@@ -12,12 +12,7 @@ export function RightPanel() {
     <AnimatePresence>
       {rightPanelOpen && (
         <motion.aside
-          className="h-full flex flex-col flex-shrink-0 border-l z-20 overflow-hidden"
-          style={{
-            background: "rgba(26,32,53,0.96)",
-            backdropFilter: "blur(8px)",
-            borderColor: "hsl(var(--hip-accent) / 0.3)",
-          }}
+          className="h-full flex flex-col flex-shrink-0 border-l border-primary/30 bg-popover/95 backdrop-blur-sm z-20 overflow-hidden"
           initial={{ width: 0 }}
           animate={{ width: 380 }}
           exit={{ width: 0 }}

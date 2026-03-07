@@ -55,7 +55,7 @@ export default function IndividualRegister() {
       >
         <div className="mb-8">
           <p className="font-mono text-primary text-xs tracking-widest mb-1">
-            HIP
+            Tribble
           </p>
           <p className="font-heading text-sm tracking-wider text-foreground">
             CREATE INDIVIDUAL ACCOUNT

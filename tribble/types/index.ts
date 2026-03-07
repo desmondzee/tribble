@@ -31,8 +31,7 @@ export type SourceType =
   | "satellite"
   | "weather_api"
   | "drone"
-  | "analyst_input"
-  | "acled";
+  | "analyst_input";
 
 export type EventVerificationStatus =
   | "unverified"

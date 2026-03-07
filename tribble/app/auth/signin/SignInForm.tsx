@@ -12,16 +12,23 @@ import { easeGentle } from "@/lib/animation-tokens";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status, login, setRole, user, error, clearError } = useAuthStore();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { status, login, setRole, user } = useAuthStore();
+  const [email, setEmail] = useState("sarah.chen@relief.io");
+  const [password, setPassword] = useState("••••••••");
+  const [selectedRole, setSelectedRole] = useState<"ngo_viewer" | "admin" | "individual">("ngo_viewer");
 
   useEffect(() => {
     const role = searchParams.get("role");
-    if (role === "admin") setRole("admin");
-    else if (role === "ngo") setRole("ngo_viewer");
-    else if (role === "individual") setRole("individual");
-    else setRole("analyst");
+    if (role === "admin") {
+      setRole("admin");
+      setSelectedRole("admin");
+    } else if (role === "ngo") {
+      setRole("ngo_viewer");
+      setSelectedRole("ngo_viewer");
+    } else if (role === "individual") {
+      setRole("individual");
+      setSelectedRole("individual");
+    }
   }, [searchParams, setRole]);
 
   useEffect(() => {
@@ -33,24 +40,13 @@ export function SignInForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    clearError();
-    login(email, password);
+    setRole(selectedRole);
+    login();
   };
-
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="font-mono text-sm text-muted-foreground flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading…
-        </div>
-      </div>
-    );
-  }
 
   if (status === "forbidden") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="landing-page min-h-screen bg-background flex items-center justify-center">
         <div className="border-2 border-destructive rounded-sm p-12 text-center max-w-md">
           <h1 className="font-heading font-bold text-2xl text-destructive tracking-wider mb-4">
             ACCESS RESTRICTED
@@ -65,7 +61,7 @@ export function SignInForm() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="landing-page min-h-screen bg-background flex">
       <div className="flex-1 flex flex-col items-center justify-center px-8">
         <motion.div
           className="w-full max-w-sm"
@@ -74,15 +70,34 @@ export function SignInForm() {
           transition={easeGentle}
         >
           <div className="mb-10">
-            <p className="font-mono text-primary text-xs tracking-widest mb-1">
-              HIP
+            <p className="font-gov text-[11px] tracking-[0.2em] uppercase text-primary mb-1">
+              Tribble
             </p>
-            <p className="font-heading font-semibold text-xs tracking-wider text-muted-foreground uppercase">
+            <p className="font-gov text-lg text-muted-foreground font-normal">
               Humanitarian Intelligence Platform
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="font-heading text-xs tracking-wider text-muted-foreground uppercase block mb-2">
+                Account type
+              </label>
+              <select
+                value={selectedRole}
+                onChange={(e) => {
+                  const r = e.target.value as "ngo_viewer" | "admin" | "individual";
+                  setSelectedRole(r);
+                  setRole(r);
+                }}
+                className="w-full h-11 rounded-md border border-border bg-card px-3 py-2 text-sm font-body text-foreground"
+                disabled={status === "authenticating"}
+              >
+                <option value="ngo_viewer">NGO</option>
+                <option value="admin">Admin</option>
+                <option value="individual">Individual</option>
+              </select>
+            </div>
             <div>
               <label className="font-heading text-xs tracking-wider text-muted-foreground uppercase block mb-2">
                 Email
@@ -91,11 +106,8 @@ export function SignInForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="bg-card border-border font-mono text-sm text-foreground"
+                className="bg-card border-border font-body text-foreground placeholder:text-muted-foreground"
                 disabled={status === "authenticating"}
-                autoComplete="email"
-                required
               />
             </div>
             <div>
@@ -106,21 +118,13 @@ export function SignInForm() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="bg-card border-border font-mono text-sm text-foreground"
+                className="bg-card border-border font-body text-foreground placeholder:text-muted-foreground"
                 disabled={status === "authenticating"}
-                autoComplete="current-password"
-                required
               />
             </div>
-            {error && (
-              <p className="text-sm text-destructive font-body" role="alert">
-                {error}
-              </p>
-            )}
             <Button
               type="submit"
-              className="w-full bg-primary text-primary-foreground font-heading font-semibold tracking-wider h-11"
+              className="w-full bg-primary text-primary-foreground font-gov font-medium tracking-wider text-sm px-8 py-3 h-auto"
               disabled={status === "authenticating"}
             >
               {status === "authenticating" ? (
@@ -138,7 +142,7 @@ export function SignInForm() {
             </span>
           </p>
 
-          <div className="mt-8 border-t border-border pt-6">
+          <div className="mt-8 pt-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-1 h-px bg-border" />
               <span className="font-mono text-[10px] text-muted-foreground tracking-wider">
@@ -147,14 +151,14 @@ export function SignInForm() {
               <div className="flex-1 h-px bg-border" />
             </div>
             <p className="font-heading text-xs tracking-wider text-foreground mb-1">
-              NEW TO HIP?
+              NEW TO Tribble?
             </p>
             <p className="text-[11px] text-muted-foreground mb-3">
               Submit reports and receive safety updates for your region.
             </p>
             <Button
               variant="outline"
-              className="w-full font-heading text-xs tracking-wider border-primary/50 text-primary hover:bg-primary/10 h-10"
+              className="w-full border-primary text-primary bg-transparent font-gov font-medium tracking-wider text-sm px-8 py-3 h-auto hover:bg-primary/10"
               onClick={() => router.push("/auth/register/individual")}
             >
               CREATE INDIVIDUAL ACCOUNT
@@ -164,29 +168,6 @@ export function SignInForm() {
               ground-level reports. Organisation access requires administrator
               approval.
             </p>
-          </div>
-
-            <div className="mt-6 border-t border-border pt-4">
-            <p className="font-mono text-[10px] text-muted-foreground mb-3 tracking-wider">
-              DEV: ROLE SHORTCUTS (set role then sign in with real credentials)
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {(["admin", "analyst", "ngo", "individual"] as const).map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => {
-                    setRole(r);
-                    if (r === "individual" && email && password) {
-                      login(email, password);
-                    }
-                  }}
-                  className="font-mono text-[10px] text-muted-foreground border border-border rounded-sm px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"
-                >
-                  {r.toUpperCase()}
-                </button>
-              ))}
-            </div>
           </div>
         </motion.div>
       </div>
@@ -225,9 +206,9 @@ function DotGrid() {
           cx={x * 30 + 15}
           cy={y * 30 + 15}
           r={1.5}
-          fill="hsl(var(--hip-accent))"
+          fill="hsl(150 55% 50%)"
           initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 0.3, 0] }}
+          animate={{ opacity: [0, 0.6, 0] }}
           transition={{
             duration: 3,
             delay: (x + y) * 0.1,

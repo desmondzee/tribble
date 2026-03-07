@@ -12,11 +12,7 @@ export function TimelineStrip() {
     <AnimatePresence>
       {timelineOpen && (
         <motion.div
-          className="h-20 flex items-center px-6 gap-6 border-t flex-shrink-0"
-          style={{
-            background: "rgba(13,17,23,0.96)",
-            borderColor: "hsl(var(--hip-accent))",
-          }}
+          className="h-20 flex items-center px-6 gap-6 border-t border-border bg-card/95 backdrop-blur-sm flex-shrink-0"
           initial={{ y: 80 }}
           animate={{ y: 0 }}
           exit={{ y: 80 }}

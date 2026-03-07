@@ -59,7 +59,7 @@ export function TopBar() {
   const { activeRole, setActiveRole } = useRoleStore();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const title = ROUTE_TITLES[pathname] || "HIP";
+  const title = ROUTE_TITLES[pathname] || "Tribble";
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
