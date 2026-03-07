@@ -23,6 +23,8 @@ class ReportSubmission(BaseModel):
     help_categories: list[str] = Field(default_factory=list, max_length=20)
     anonymous: bool = True
     parent_report_id: UUID | None = None
+    country: str | None = None
+    country_iso: str | None = None
 
 
 class ReportResponse(BaseModel):
@@ -61,6 +63,8 @@ async def submit_report(sub: ReportSubmission):
                         str(sub.parent_report_id) if sub.parent_report_id else None
                     ),
                     "p_processing_metadata": {},
+                    **({"p_country": sub.country} if sub.country else {}),
+                    **({"p_country_iso": sub.country_iso} if sub.country_iso else {}),
                 },
             )
             .execute()
