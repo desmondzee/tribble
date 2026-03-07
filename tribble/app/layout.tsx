@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Barlow_Condensed, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { DataProvider } from "@/context/DataContext";
+import { AuthSync } from "@/components/AuthSync";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -41,7 +42,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${barlowCondensed.variable} ${ibmPlexSans.variable} antialiased`}
       >
-        <DataProvider>{children}</DataProvider>
+        <DataProvider>
+          <AuthSync />
+          {children}
+        </DataProvider>
         <Toaster theme="dark" richColors position="bottom-right" />
       </body>
     </html>

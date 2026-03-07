@@ -22,6 +22,7 @@ export default function AppLayout({
   const router = useRouter();
 
   useEffect(() => {
+    if (status === "loading") return;
     if (status !== "authenticated") {
       router.replace("/auth/signin");
     }
@@ -52,7 +53,7 @@ export default function AppLayout({
     return () => window.removeEventListener("keydown", handler);
   }, [setFilterPanelOpen, setTimelineOpen, setCommandPaletteOpen]);
 
-  if (status !== "authenticated") return null;
+  if (status === "loading" || status !== "authenticated") return null;
 
   return (
     <div className="h-screen flex w-full overflow-hidden bg-background">

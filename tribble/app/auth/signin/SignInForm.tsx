@@ -12,9 +12,9 @@ import { easeGentle } from "@/lib/animation-tokens";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status, login, setRole, user } = useAuthStore();
-  const [email, setEmail] = useState("sarah.chen@relief.io");
-  const [password, setPassword] = useState("••••••••");
+  const { status, login, setRole, user, error, clearError } = useAuthStore();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     const role = searchParams.get("role");
@@ -33,8 +33,20 @@ export function SignInForm() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    login();
+    clearError();
+    login(email, password);
   };
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="font-mono text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading…
+        </div>
+      </div>
+    );
+  }
 
   if (status === "forbidden") {
     return (
@@ -79,8 +91,11 @@ export function SignInForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
                 className="bg-card border-border font-mono text-sm text-foreground"
                 disabled={status === "authenticating"}
+                autoComplete="email"
+                required
               />
             </div>
             <div>
@@ -91,10 +106,18 @@ export function SignInForm() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
                 className="bg-card border-border font-mono text-sm text-foreground"
                 disabled={status === "authenticating"}
+                autoComplete="current-password"
+                required
               />
             </div>
+            {error && (
+              <p className="text-sm text-destructive font-body" role="alert">
+                {error}
+              </p>
+            )}
             <Button
               type="submit"
               className="w-full bg-primary text-primary-foreground font-heading font-semibold tracking-wider h-11"
@@ -143,9 +166,9 @@ export function SignInForm() {
             </p>
           </div>
 
-          <div className="mt-6 border-t border-border pt-4">
+            <div className="mt-6 border-t border-border pt-4">
             <p className="font-mono text-[10px] text-muted-foreground mb-3 tracking-wider">
-              DEV: ROLE SHORTCUTS
+              DEV: ROLE SHORTCUTS (set role then sign in with real credentials)
             </p>
             <div className="flex gap-2 flex-wrap">
               {(["admin", "analyst", "ngo", "individual"] as const).map((r) => (
@@ -153,11 +176,9 @@ export function SignInForm() {
                   key={r}
                   type="button"
                   onClick={() => {
-                    if (r === "individual") {
-                      setRole("individual");
-                      login();
-                    } else {
-                      router.push(`/auth/signin?role=${r}`);
+                    setRole(r);
+                    if (r === "individual" && email && password) {
+                      login(email, password);
                     }
                   }}
                   className="font-mono text-[10px] text-muted-foreground border border-border rounded-sm px-3 py-1.5 hover:border-primary hover:text-primary transition-colors"

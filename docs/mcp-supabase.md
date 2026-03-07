@@ -8,6 +8,15 @@ Cursor is configured to use the [Supabase MCP server](https://supabase.com/docs/
 - **Auth:** On first use, Cursor will open a browser so you can log in to Supabase and grant the MCP client access. No API keys go in the config.
 - **Restart:** After adding or changing `.cursor/mcp.json`, restart Cursor and check **Settings → Tools & MCP** that the Supabase server is connected.
 
+## Optional: Personal Access Token (PAT) for MCP
+
+If you prefer not to use browser OAuth (e.g. headless or CI), you can use a [Supabase Personal Access Token](https://supabase.com/dashboard/account/tokens) (e.g. labelled “Personal use”). **Never commit the token.**
+
+- Store it only in a local, uncommitted env file (e.g. `backend/.env`) as:
+  - `SUPABASE_ACCESS_TOKEN=sbp_...`
+  - `SUPABASE_PROJECT_REF=atakrwvijdbihjzsvikd`
+- For MCP clients that support headers, use the MCP URL with `?project_ref=atakrwvijdbihjzsvikd` and pass `Authorization: Bearer $SUPABASE_ACCESS_TOKEN`. Cursor’s project-level config may not support env-based headers; use browser OAuth for Cursor and reserve the PAT for CLI/CI if needed.
+
 ## Service role key (backend only)
 
 The **service role** key from the Supabase dashboard is for the **backend** (Python), not for MCP:
