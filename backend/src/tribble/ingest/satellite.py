@@ -7,7 +7,7 @@ from tribble.config import get_settings
 logger = logging.getLogger(__name__)
 
 
-def build_stac_search_params(
+def build_planetary_computer_search_params(
     lat: float,
     lon: float,
     date_from: str,
@@ -23,6 +23,24 @@ def build_stac_search_params(
         "limit": limit,
         "sortby": [{"field": "datetime", "direction": "desc"}],
     }
+
+
+def build_stac_search_params(
+    lat: float,
+    lon: float,
+    date_from: str,
+    date_to: str,
+    max_cloud_cover: int = 30,
+    limit: int = 10,
+) -> dict:
+    return build_planetary_computer_search_params(
+        lat=lat,
+        lon=lon,
+        date_from=date_from,
+        date_to=date_to,
+        max_cloud_cover=max_cloud_cover,
+        limit=limit,
+    )
 
 
 async def search_sentinel2_scenes(

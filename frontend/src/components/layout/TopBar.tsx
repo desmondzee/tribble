@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal, Bell, Menu, ChevronDown } from 'lucide-react
 import { useUIStore } from '@/store/uiSlice';
 import { useFilterStore } from '@/store/filterSlice';
 import { useRoleStore, ROLE_LABELS, ROLE_DESCRIPTIONS, type AppRole } from '@/store/roleSlice';
+import { useRealtimeStore } from '@/store/realtimeSlice';
 import { SOURCE_ICONS } from '@/lib/icon-registry';
 import type { SourceType } from '@/types';
 import { useState, useRef, useEffect } from 'react';
@@ -38,6 +39,7 @@ export const TopBar = () => {
   const { setCommandPaletteOpen, setFilterPanelOpen, setSidebarExpanded, sidebarExpanded } = useUIStore();
   const { severities, sourcesVisible, setFilter } = useFilterStore();
   const { activeRole, setActiveRole } = useRoleStore();
+  const { connected, recentEventIds } = useRealtimeStore();
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const title = ROUTE_TITLES[location.pathname] || 'HIP';
@@ -92,11 +94,15 @@ export const TopBar = () => {
 
           {/* Centre chip */}
           <motion.span
-            className="font-mono text-[10px] text-destructive bg-destructive/10 border border-destructive/20 rounded-sm px-2 py-0.5 whitespace-nowrap ml-auto mr-auto"
+            className={`font-mono text-[10px] rounded-sm px-2 py-0.5 whitespace-nowrap ml-auto mr-auto border ${
+              connected
+                ? 'text-[hsl(var(--hip-green))] bg-[hsl(var(--hip-green))/0.1] border-[hsl(var(--hip-green))/0.2]'
+                : 'text-destructive bg-destructive/10 border-destructive/20'
+            }`}
             animate={{ opacity: [0.7, 1, 0.7] }}
             transition={{ duration: 3, repeat: Infinity }}
           >
-            3 NEW EVENTS · LAST 5 MIN
+            {connected ? `${recentEventIds.length} LIVE EVENTS` : 'REALTIME DISCONNECTED'}
           </motion.span>
         </div>
 

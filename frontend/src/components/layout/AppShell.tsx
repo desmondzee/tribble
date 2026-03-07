@@ -8,11 +8,14 @@ import { RightPanel } from '@/components/layout/RightPanel';
 import { TimelineStrip } from '@/components/layout/TimelineStrip';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { SimulatedMap } from '@/components/map/SimulatedMap';
+import { OperationalMap } from '@/components/map/OperationalMap';
+import { isMapboxEnabled } from '@/lib/mapbox';
 
 export const AppShell = () => {
   const { status } = useAuthStore();
   const { setFilterPanelOpen, setTimelineOpen, setCommandPaletteOpen, setRightPanelOpen } = useUIStore();
   const navigate = useNavigate();
+  const useOperationalMap = isMapboxEnabled();
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -54,7 +57,7 @@ export const AppShell = () => {
         <div className="flex-1 flex min-h-0 relative">
           {/* Map canvas (always rendered behind everything) */}
           <div className="absolute inset-0 z-0">
-            <SimulatedMap />
+            {useOperationalMap ? <OperationalMap /> : <SimulatedMap />}
           </div>
 
           {/* Page overlay content */}
