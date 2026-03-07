@@ -19,6 +19,10 @@ This is a **pipeline, not an agent swarm**. LangGraph orchestrates a fixed 11-no
 
 The full implementation plan is at `docs/plans/2026-03-07-humanitarian-intelligence-platform.md`. It contains 18 sequential TDD tasks.
 
+**Stage 2:** `docs/plans/2026-03-07-humanitarian-intelligence-platform-stage-2.md` — assistant, FLock, satellite EO/fusion, streaming, Mapbox, Realtime, Z.ai research.
+
+**Post–Stage 2 completion:** `docs/plans/2026-03-07-post-stage2-platform-completion.md` — backbone alignment, six-layer architecture, artifact set (diagrams, service spec, schema, LangGraph, API, confidence), and phased roadmap (Z.ai in pipeline, WhatsApp intake, polish).
+
 **To implement:** Use the `executing-plans` skill to work through the plan task-by-task.
 
 ## Development Workflow
