@@ -9,6 +9,7 @@ LLMStatus = Literal["ok", "disabled", "unavailable"]
 class LLMResult:
     status: LLMStatus
     text: str = ""
+    provider: str | None = None
     model: str | None = None
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
