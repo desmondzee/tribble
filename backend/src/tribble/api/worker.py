@@ -12,11 +12,12 @@ class WorkerStartRequest(BaseModel):
 
 
 @router.post("/start")
-async def start_worker(payload: WorkerStartRequest):
+async def start_worker(payload: WorkerStartRequest | None = None):
+    cfg = payload or WorkerStartRequest()
     worker = get_pipeline_worker()
     return await worker.start(
-        worker_id=payload.worker_id,
-        poll_interval_s=payload.poll_interval_s,
+        worker_id=cfg.worker_id,
+        poll_interval_s=cfg.poll_interval_s,
     )
 
 

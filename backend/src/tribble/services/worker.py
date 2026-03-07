@@ -64,7 +64,15 @@ def _is_successful_pipeline_status(status: object) -> bool:
 
 
 async def process_one_job(worker_id: str) -> ProcessJobResult:
-    claimed_job = await claim_next_job(worker_id)
+    try:
+        claimed_job = await claim_next_job(worker_id)
+    except Exception as exc:
+        return ProcessJobResult(
+            worker_id=worker_id,
+            status="failed",
+            error=str(exc),
+        )
+
     if not claimed_job:
         return ProcessJobResult(worker_id=worker_id, status="skipped")
 
@@ -191,7 +199,14 @@ class PipelineWorker:
 
     async def _run_loop(self) -> None:
         while self._state.running:
-            result = await process_one_job(self._state.worker_id)
+            try:
+                result = await process_one_job(self._state.worker_id)
+            except Exception as exc:
+                result = ProcessJobResult(
+                    worker_id=self._state.worker_id,
+                    status="failed",
+                    error=str(exc),
+                )
             self._state.last_result = result.status
             if result.status == "completed":
                 self._state.jobs_completed += 1
