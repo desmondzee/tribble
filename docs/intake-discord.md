@@ -1,6 +1,6 @@
-# Discord intake — how to implement
+# Discord and WhatsApp intake
 
-The backend exposes **POST /api/intake/discord** so you can submit crisis reports from Discord (or any HTTP client). This doc covers running it and wiring a real Discord bot.
+The backend exposes **POST /api/intake/discord** and **POST /api/intake/whatsapp** so you can submit crisis reports from Discord, WhatsApp, or any HTTP client. This doc covers running the API and wiring a Discord bot; WhatsApp uses the same payload shape.
 
 ## 1. Apply the migration
 
@@ -44,6 +44,23 @@ curl -X POST http://localhost:8000/api/intake/discord \
 Optional: `"language": "en"`, `"country_iso": "SSD"`.
 
 Success: `201` and `{"report_id": "...", "status": "queued"}`. The report is created and a pipeline job is enqueued (same as web submit).
+
+### WhatsApp (same payload shape)
+
+Use **POST /api/intake/whatsapp** with the same JSON body. Reports are stored with `source_type=whatsapp_anonymous` (confidence prior 0.40).
+
+```bash
+curl -X POST http://localhost:8000/api/intake/whatsapp \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Flooding in Juba, main road blocked. Families need water and shelter.",
+    "latitude": 4.85,
+    "longitude": 31.6,
+    "country_iso": "SSD"
+  }'
+```
+
+To wire real WhatsApp: use **Twilio** or **Meta Business API** to receive incoming messages, then POST to this URL (e.g. from a serverless function or Zapier) with the message body and coordinates (e.g. parsed from text or shared location). No Twilio/Meta setup is required for testing—call the endpoint directly as above.
 
 ## 4. Wire a real Discord bot (optional)
 
@@ -108,13 +125,13 @@ If you prefer not to run a bot:
 
 - **422**: Invalid payload (e.g. message &lt; 10 chars, missing lat/lng, or out-of-range coordinates). Fix the request body.
 - **503**: Database unavailable. Check Supabase and env.
-- **500**: RPC failed (e.g. migration not applied). Check backend logs and that `discord_anonymous` is in the `reports.source_type` check constraint.
+- **500**: RPC failed (e.g. migration not applied). Check backend logs and that `discord_anonymous` / `whatsapp_anonymous` are allowed in the `reports.source_type` check constraint.
 
 ## Summary
 
 | Step | Action |
 |------|--------|
-| 1 | Apply `021_intake_discord_source_type.sql` (e.g. `supabase db push`) |
+| 1 | Apply `021_intake_discord_source_type.sql` (e.g. `supabase db push`) for Discord; WhatsApp source types already exist |
 | 2 | Run backend with Supabase env vars set |
-| 3 | POST to `/api/intake/discord` with `message`, `latitude`, `longitude` |
-| 4 | Optionally run a Discord bot or automation that forwards messages to that URL |
+| 3 | POST to `/api/intake/discord` or `/api/intake/whatsapp` with `message`, `latitude`, `longitude` |
+| 4 | Optionally run a Discord bot or Twilio/Meta webhook that forwards messages to the corresponding URL |
