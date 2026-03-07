@@ -73,8 +73,13 @@ async def persist_pipeline_outputs(report_id: str, pipeline_result: dict) -> Non
     verification_run_id = inserted[0].get("id")
     confidence_scores = pipeline_result.get("confidence_scores")
     confidence_breakdown = pipeline_result.get("confidence_breakdown")
+    validation_context = pipeline_result.get("validation_context")
     if not verification_run_id or not confidence_scores or not confidence_breakdown:
         return
+
+    breakdown_with_validation = {**confidence_breakdown}
+    if validation_context:
+        breakdown_with_validation["validation_context"] = validation_context
 
     db.table("confidence_scores").insert(
         {
@@ -83,7 +88,7 @@ async def persist_pipeline_outputs(report_id: str, pipeline_result: dict) -> Non
             "publishability": float(confidence_scores.get("publishability", 0.0)),
             "urgency": float(confidence_scores.get("urgency", 0.0)),
             "access_difficulty": float(confidence_scores.get("access_difficulty", 0.0)),
-            "breakdown": confidence_breakdown,
+            "breakdown": breakdown_with_validation,
         }
     ).execute()
 

@@ -185,3 +185,17 @@ def test_score_builds_validation_context():
     assert "satellite" in result["validation_context"]
     assert "weather" in result["validation_context"]
     assert "acled" in result["validation_context"]
+
+
+def test_full_flow_includes_validation_context():
+    r = build_pipeline().invoke(
+        _state(
+            raw_narrative="Water station destroyed, no clean water for three days running",
+            report_type="water_need",
+            source_type="whatsapp_identified",
+        )
+    )
+    assert r["status"] == PipelineStatus.PUBLISHED
+    assert r["validation_context"] is not None
+    assert "satellite" in r["validation_context"]
+    assert r["confidence_breakdown"]["source_prior"] == 0.65  # whatsapp_identified prior
