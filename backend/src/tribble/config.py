@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="TRIBBLE_")
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="TRIBBLE_", extra="ignore")
 
     supabase_url: str = ""
     supabase_service_key: str = Field(default="", repr=False)

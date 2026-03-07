@@ -15,12 +15,18 @@ logger = logging.getLogger(__name__)
 def _safe_node(fn):
     @wraps(fn)
     def wrapper(state: PipelineState) -> dict:
+        report_id = state.get("report_id") or "unknown"
+        logger.info(
+            "Pipeline node %s for report %s",
+            fn.__name__,
+            report_id,
+        )
         try:
             return fn(state)
         except Exception as exc:
             logger.error(
                 "Pipeline node %s failed for report %s: %s",
-                fn.__name__, state.get("report_id"), exc, exc_info=True,
+                fn.__name__, report_id, exc, exc_info=True,
             )
             return {
                 "status": PipelineStatus.ERROR,
