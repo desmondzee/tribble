@@ -283,7 +283,7 @@ Tribble is built to align with:
 
 - **FLock Track (SDG-focused agentic AI)** — OpenClaw-style assistant, multi-channel deployment (WhatsApp, Discord), optional FLock API and open-source model inference, measurable impact via crisis clustering and confidence scoring.
 - **Z.AI bounty** — Z.AI (GLM series) integrated for translation, extraction, classification, and orchestration within the pipeline; working prototype with live demo path.
-- **TCC AI Agent / satellite** — Real-world event detection, Sentinel-2 retrieval and analysis (NDVI, NDWI, change detection, flood example), weather and news fusion, and insights delivered via map and API.
+- **TCC AI Agent / satellite** — Real-world event detection, Sentinel-2 retrieval and analysis (NDVI, NDWI, change detection, flood example), weather and news fusion, and insights delivered via map and API. Also can analyse the disaster zone before and after the incident, with AI detection of damaged infrastructure etc...
 
 ---
 
