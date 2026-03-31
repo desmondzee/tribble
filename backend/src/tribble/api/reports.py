@@ -32,6 +32,45 @@ class ReportResponse(BaseModel):
     status: str
 
 
+class ReportValidationResponse(BaseModel):
+    confidence_scores: dict
+    validation_context: dict
+    breakdown: dict | None = None
+
+
+@router.get("/{report_id}/validation", response_model=ReportValidationResponse)
+async def get_report_validation(report_id: UUID):
+    """Return validation context (weather, satellite, ACLED) and confidence scores for a report.
+
+    Returns 404 if the report has no confidence_scores yet (e.g. still queued).
+    """
+    db = get_supabase()
+    rows = (
+        db.table("confidence_scores")
+        .select("publishability,urgency,access_difficulty,breakdown")
+        .eq("report_id", str(report_id))
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(404, "Validation not available for this report")
+    row = rows[0]
+    breakdown = row.get("breakdown") or {}
+    validation_context = breakdown.get("validation_context") or {}
+    return ReportValidationResponse(
+        confidence_scores={
+            "publishability": float(row.get("publishability", 0.0)),
+            "urgency": float(row.get("urgency", 0.0)),
+            "access_difficulty": float(row.get("access_difficulty", 0.0)),
+        },
+        validation_context=validation_context,
+        breakdown=breakdown,
+    )
+
+
 @router.post("", status_code=201, response_model=ReportResponse)
 async def submit_report(sub: ReportSubmission):
     try:

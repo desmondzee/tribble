@@ -17,7 +17,7 @@ export type LayerId =
   | 'C1_armed_conflict' | 'C2_infrastructure' | 'C3_displacement'
   | 'C4_aid_humanitarian' | 'C5_natural_environmental'
   | 'D1_risk_heatmap' | 'D2_news_feed' | 'D3_weather' | 'D4_satellite' | 'D5_conflict_arcs'
-  | 'E1_drones' | 'E2_supply_routes' | 'E3_aid_points';
+  | 'E2_supply_routes' | 'E3_aid_points';
 
 export type LayerGroupId = 'A' | 'B' | 'C' | 'D' | 'E';
 
@@ -55,7 +55,6 @@ export const LAYER_DEFS: LayerDef[] = [
   { id: 'D4_satellite', group: 'D', label: 'Satellite', defaultVisible: false, defaultOpacity: 0.5 },
   { id: 'D5_conflict_arcs', group: 'D', label: 'Conflict Arcs', defaultVisible: true, defaultOpacity: 0.6 },
   // Group E — Assets
-  { id: 'E1_drones', group: 'E', label: 'Drone Positions', defaultVisible: true, defaultOpacity: 1 },
   { id: 'E2_supply_routes', group: 'E', label: 'Supply Routes', defaultVisible: true, defaultOpacity: 0.8 },
   { id: 'E3_aid_points', group: 'E', label: 'Aid Delivery Points', defaultVisible: true, defaultOpacity: 1 },
 ];

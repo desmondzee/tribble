@@ -14,10 +14,13 @@ class Settings(BaseSettings):
     acled_email: str = ""
     openweathermap_api_key: str = Field(default="", repr=False)
     zai_api_key: str = Field(default="", repr=False)
+    zai_base_url: str = "https://api.z.ai/v1"
     zai_model: str = "glm-4"
+    enable_zai: bool = False
     enable_openclaw: bool = False
     enable_flock: bool = False
     enable_satellite_ml: bool = False
+    enable_satellite_ai_analysis: bool = False
     flock_api_base_url: str = "https://api.flock.io/v1"
     flock_api_key: str = Field(default="", repr=False)
     flock_model: str = "meta-llama/Llama-3.3-70B-Instruct"
@@ -27,14 +30,26 @@ class Settings(BaseSettings):
     satellite_change_window_days: int = 14
     satellite_ml_provider_url: str = ""
     satellite_ml_api_key: str = Field(default="", repr=False)
+    satellite_event_snapshot_km: float = 5.0
+    satellite_event_time_windows: list[dict] = Field(
+        default_factory=lambda: [
+            {"label": "before", "offset_days": -14},
+            {"label": "at_event", "offset_days": 0, "tolerance_days": 3},
+            {"label": "after", "offset_days": 7},
+        ],
+        description="Time windows for multi-period snapshots (days relative to event date)",
+    )
     pipeline_max_retries: int = 3
     cluster_radius_km: float = 5.0
     cluster_time_window_hours: int = 72
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    anthropic_api_key: str = Field(default="", repr=False)
+    llm_model: str = "claude-3-5-haiku-20241022"
     gemini_api_key: str = Field(default="", repr=False)
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.0-flash"
     discord_webhook_url: str = ""
     open_meteo_base_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
 
 
 @lru_cache

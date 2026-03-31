@@ -1,4 +1,4 @@
-import type { HipEvent, UserSubmission, NGO, Drone } from "@/types";
+import type { HipEvent, UserSubmission, NGO } from "@/types";
 import type { Zone, Boundary } from "@/types/zone";
 import {
   DARFUR_BORDER,
@@ -156,37 +156,6 @@ export const PLACEHOLDER_SUBMISSIONS: UserSubmission[] = [
     reviewed_by: "ANA-011",
     linked_event_id: "EVT-0060",
     helios_confidence: 0.88,
-  },
-];
-
-export const PLACEHOLDER_DRONES: Drone[] = [
-  {
-    id: "DRN-001",
-    status: "active",
-    battery_pct: 78,
-    position: { lat: 15.5, lng: 32.4, altitude_m: 120, speed_kmh: 45, heading_deg: 47 },
-    signal: "strong",
-  },
-  {
-    id: "DRN-002",
-    status: "standby",
-    battery_pct: 100,
-    position: { lat: 19.6, lng: 37.22, altitude_m: 0, speed_kmh: 0, heading_deg: 210 },
-    signal: "strong",
-  },
-  {
-    id: "DRN-003",
-    status: "low_battery",
-    battery_pct: 14,
-    position: { lat: 13.8, lng: 25.1, altitude_m: 85, speed_kmh: 30, heading_deg: 290 },
-    signal: "weak",
-  },
-  {
-    id: "DRN-004",
-    status: "lost_signal",
-    battery_pct: 43,
-    position: { lat: 13.45, lng: 22.44, altitude_m: 0, speed_kmh: 0, heading_deg: 135 },
-    signal: "lost",
   },
 ];
 

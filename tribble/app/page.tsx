@@ -24,17 +24,12 @@ const CAPABILITIES = [
   {
     title: "INTELLIGENCE MAP",
     description:
-      "Full-bleed operational map with real-time incident markers, drone telemetry, risk heatmaps, and settlement overlays across active conflict zones.",
+      "Full-bleed operational map with real-time incident markers, risk heatmaps, and settlement overlays across active conflict zones.",
   },
   {
     title: "HELIOS AGENT",
     description:
       "Natural language operational assistant that queries the intelligence picture, dispatches assets, and generates structured situation reports on demand.",
-  },
-  {
-    title: "DRONE OPERATIONS",
-    description:
-      "Fleet-wide drone management — live positions, battery status, mission dispatch, flight path tracking, and reconnaissance coordination.",
   },
 ];
 
@@ -132,7 +127,7 @@ export default function Home() {
           <p className="font-impact font-bold text-lg text-foreground leading-relaxed text-left tracking-tight">
             Tribble provides a unified, real-time operational intelligence picture
             for humanitarian organisations operating in active conflict zones. It
-            combines geospatial data, AI-driven analysis, and drone
+            combines geospatial data, AI-driven analysis, and satellite
             reconnaissance into a single, actionable interface.
           </p>
         </div>

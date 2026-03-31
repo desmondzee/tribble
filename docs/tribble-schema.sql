@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS analysis_results (
   analysis_type text NOT NULL,
   summary text NOT NULL,
   details jsonb DEFAULT '{}',
-  provider text NOT NULL DEFAULT 'gemini',
+  provider text NOT NULL DEFAULT 'anthropic',
   model text,
   events_analyzed int DEFAULT 0,
   reports_analyzed int DEFAULT 0,

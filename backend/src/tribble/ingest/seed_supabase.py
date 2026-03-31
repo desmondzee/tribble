@@ -91,13 +91,13 @@ def seed_civilian_reports(sb) -> int:
 
 
 async def seed_analysis(sb) -> int:
-    """Run Gemini analysis on seeded data and insert into 'analysis_results'."""
+    """Run Claude analysis on seeded data and insert into 'analysis_results'."""
     from tribble.config import get_settings
-    from tribble.services.gemini_provider import GeminiProvider
+    from tribble.services.anthropic_provider import AnthropicProvider
 
     settings = get_settings()
-    if not settings.gemini_api_key:
-        logger.warning("Gemini API key not set, skipping analysis")
+    if not settings.anthropic_api_key:
+        logger.warning("Anthropic API key not set, skipping analysis")
         return 0
 
     # Fetch data for analysis prompt
@@ -112,18 +112,18 @@ async def seed_analysis(sb) -> int:
     from tribble.api.analysis import _build_analysis_prompt
 
     prompt = _build_analysis_prompt(events, reports, weather)
-    gemini = GeminiProvider(api_key=settings.gemini_api_key, model=settings.gemini_model)
-    result = await gemini.generate(prompt)
+    llm = AnthropicProvider(api_key=settings.anthropic_api_key, model=settings.llm_model)
+    result = await llm.generate(prompt)
 
     if result.status != "ok":
-        logger.warning("Gemini analysis failed: %s", result.error)
+        logger.warning("Claude analysis failed: %s", result.error)
         return 0
 
     row = {
         "analysis_type": "situation_report",
         "summary": result.text,
         "details": result.metadata,
-        "provider": "gemini",
+        "provider": "anthropic",
         "model": result.model,
         "events_analyzed": len(events),
         "reports_analyzed": len(reports),

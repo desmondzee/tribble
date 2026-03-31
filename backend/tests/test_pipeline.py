@@ -1,5 +1,15 @@
 from tribble.pipeline.state import PipelineState, PipelineStatus
-from tribble.pipeline.graph import build_pipeline, classify, corroborate, enrich_weather, ACLED_CORROBORATION_MAP, compute_corroboration_score
+from tribble.pipeline.graph import (
+    build_pipeline,
+    classify,
+    corroborate,
+    enrich_weather,
+    fetch_weather,
+    translate,
+    verify_extract,
+    ACLED_CORROBORATION_MAP,
+    compute_corroboration_score,
+)
 
 
 def _state(**kw) -> PipelineState:
@@ -25,6 +35,8 @@ def _state(**kw) -> PipelineState:
         "satellite_eo_features": None,
         "satellite_quality": None,
         "satellite_alert": None,
+        "satellite_scene": None,
+        "satellite_ai": None,
         "confidence_breakdown": None,
         "confidence_scores": None,
         "cluster_id": None,
@@ -32,6 +44,7 @@ def _state(**kw) -> PipelineState:
         "validation_context": None,
         "corroboration_score": None,
         "corroboration_acled_classes": None,
+        "llm_verification": None,
     }
     base.update(kw)
     return base
@@ -51,7 +64,7 @@ def test_full_flow():
         _state(raw_narrative="Heavy fighting near the airport, families sheltering")
     )
     assert r["status"] == PipelineStatus.PUBLISHED
-    assert len(r["node_trace"]) == 11
+    assert len(r["node_trace"]) == 14
     assert r["confidence_scores"] is not None
 
 
@@ -144,6 +157,58 @@ def test_enrich_weather_without_data():
     assert result["weather_data"] is None or result["weather_data"].get("flood_risk", 0) == 0
 
 
+def test_fetch_weather_populates_weather_data(monkeypatch):
+    from tribble.ingest import weather as weather_module
+    raw = {
+        "temperature_c": 28.0,
+        "humidity_pct": 60.0,
+        "wind_speed_ms": 3.0,
+        "condition": "Clear",
+        "precipitation_mm": 0.0,
+    }
+    monkeypatch.setattr(weather_module, "fetch_weather_for_pipeline", lambda lat, lon, date_str=None: raw)
+    s = _state(latitude=13.63, longitude=25.35, timestamp="2024-05-06T10:00:00Z")
+    s["node_trace"] = ["prefilter", "normalize", "translate", "classify", "geocode", "deduplicate", "corroborate"]
+    s["status"] = PipelineStatus.CORROBORATED
+    result = fetch_weather(s)
+    assert result["weather_data"] == raw
+    assert "fetch_weather" in result["node_trace"]
+
+
+def test_fetch_weather_on_failure_leaves_none(monkeypatch):
+    from tribble.ingest import weather as weather_module
+    monkeypatch.setattr(weather_module, "fetch_weather_for_pipeline", lambda lat, lon, date_str=None: None)
+    s = _state(latitude=13.63, longitude=25.35)
+    s["node_trace"] = ["corroborate"]
+    s["status"] = PipelineStatus.CORROBORATED
+    result = fetch_weather(s)
+    assert result["weather_data"] is None
+    assert "fetch_weather" in result["node_trace"]
+
+
+def test_full_flow_with_mocked_weather_produces_weather_risks(monkeypatch):
+    from tribble.ingest import weather as weather_module
+    raw = {
+        "temperature_c": 22.0,
+        "humidity_pct": 80.0,
+        "wind_speed_ms": 8.0,
+        "condition": "Rain",
+        "precipitation_mm": 25.0,
+    }
+    monkeypatch.setattr(weather_module, "fetch_weather_for_pipeline", lambda lat, lon, date_str=None: raw)
+    r = build_pipeline().invoke(
+        _state(
+            raw_narrative="Heavy fighting near the airport, families sheltering",
+            latitude=13.63,
+            longitude=25.35,
+        )
+    )
+    assert r["status"] == PipelineStatus.PUBLISHED
+    assert r.get("weather_data") is not None
+    assert "flood_risk" in r["weather_data"]
+    assert "route_disruption_risk" in r["weather_data"]
+
+
 def test_score_uses_real_source_prior():
     s = _state(
         raw_narrative="Water shortage reported in area for many days now",
@@ -198,4 +263,86 @@ def test_full_flow_includes_validation_context():
     assert r["status"] == PipelineStatus.PUBLISHED
     assert r["validation_context"] is not None
     assert "satellite" in r["validation_context"]
+    assert "llm_verification" in r["validation_context"]
     assert r["confidence_breakdown"]["source_prior"] == 0.65  # whatsapp_identified prior
+
+
+def test_verify_extract_keyword_fallback_sets_report_type():
+    s = _state(
+        raw_narrative="Water station destroyed, no water supply",
+        normalized={"narrative_clean": "Water station destroyed, no water supply"},
+    )
+    s["node_trace"] = ["normalize", "translate"]
+    result = verify_extract(s)
+    assert result["report_type"] == "water_need"
+    assert result["llm_verification"]["provider"] == "keyword_fallback"
+    assert result["llm_verification"]["report_type"] == "water_need"
+
+
+def test_translate_non_en_stub_when_zai_disabled():
+    """When Z.ai is disabled (default), non-English narrative is passed through as translation stub."""
+    s = _state(language="ar", raw_narrative="هناك قصف قرب المطار")
+    result = translate(s)
+    assert result["status"] == "translated"
+    assert result["translation"] == "هناك قصف قرب المطار"
+
+
+def test_translate_en_returns_none():
+    s = _state(language="en", raw_narrative="Heavy shelling near airport")
+    result = translate(s)
+    assert result["translation"] is None
+
+
+def test_translate_uses_zai_when_enabled(monkeypatch):
+    from tribble.services.llm_provider import LLMResult
+
+    async def mock_generate(prompt: str, stream: bool = False):
+        return LLMResult(status="ok", provider="zai", model="glm-4", text="Translated to English")
+
+    class MockProvider:
+        generate = mock_generate
+
+    monkeypatch.setattr(
+        "tribble.pipeline.graph.get_zai_provider",
+        lambda: MockProvider(),
+    )
+    s = _state(language="ar", raw_narrative="هناك قصف")
+    result = translate(s)
+    assert result["translation"] == "Translated to English"
+
+
+def test_classify_help_categories_empty_when_zai_disabled():
+    """When Z.ai is disabled, help_categories stay empty; crisis_categories from report_type."""
+    s = _state(raw_narrative="Medical supplies needed", report_type="medical_need")
+    result = classify(s)
+    assert result["classification"]["crisis_categories"] == ["health"]
+    assert result["classification"]["help_categories"] == []
+
+
+def test_classify_uses_zai_when_enabled(monkeypatch):
+    from tribble.services.llm_provider import LLMResult
+
+    async def mock_generate(prompt: str, stream: bool = False):
+        return LLMResult(
+            status="ok",
+            provider="zai",
+            model="glm-4",
+            text='{"crisis_categories": ["security", "health"], "help_categories": ["medical_aid"]}',
+        )
+
+    class MockProvider:
+        generate = mock_generate
+
+    monkeypatch.setattr(
+        "tribble.pipeline.graph.get_zai_provider",
+        lambda: MockProvider(),
+    )
+    s = _state(
+        raw_narrative="People injured in shelling, need medical help",
+        report_type="shelling",
+        translation="People injured in shelling, need medical help",
+    )
+    result = classify(s)
+    assert "security" in result["classification"]["crisis_categories"]
+    assert "health" in result["classification"]["crisis_categories"]
+    assert result["classification"]["help_categories"] == ["medical_aid"]

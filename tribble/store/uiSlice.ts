@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type RightPanelTab = "agent" | "news_feed" | "drone_ops" | "cluster_inspect";
+export type RightPanelTab = "agent" | "news_feed" | "cluster_inspect";
 
 interface UISlice {
   sidebarExpanded: boolean;
@@ -10,9 +10,11 @@ interface UISlice {
   timelineOpen: boolean;
   commandPaletteOpen: boolean;
   selectedEventId: string | null;
+  selectedNewsEventId: string | null;
   activeConflictZoneId: string | null;
   selectedClusterId: string | null;
   locationPickMode: boolean;
+  submissionQueueMinimised: boolean;
   setSidebarExpanded: (expanded: boolean) => void;
   setFilterPanelOpen: (open: boolean) => void;
   setRightPanelOpen: (open: boolean) => void;
@@ -20,9 +22,11 @@ interface UISlice {
   setTimelineOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
   setSelectedEventId: (id: string | null) => void;
+  setSelectedNewsEventId: (id: string | null) => void;
   setActiveConflictZoneId: (id: string | null) => void;
   setSelectedClusterId: (id: string | null) => void;
   setLocationPickMode: (on: boolean) => void;
+  setSubmissionQueueMinimised: (minimised: boolean) => void;
 }
 
 export const useUIStore = create<UISlice>((set) => ({
@@ -33,9 +37,11 @@ export const useUIStore = create<UISlice>((set) => ({
   timelineOpen: false,
   commandPaletteOpen: false,
   selectedEventId: null,
+  selectedNewsEventId: null,
   activeConflictZoneId: null,
   selectedClusterId: null,
   locationPickMode: false,
+  submissionQueueMinimised: false,
   setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
   setFilterPanelOpen: (open) => set({ filterPanelOpen: open }),
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
@@ -43,7 +49,9 @@ export const useUIStore = create<UISlice>((set) => ({
   setTimelineOpen: (open) => set({ timelineOpen: open }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setSelectedEventId: (id) => set({ selectedEventId: id }),
+  setSelectedNewsEventId: (id) => set({ selectedNewsEventId: id }),
   setActiveConflictZoneId: (id) => set({ activeConflictZoneId: id }),
   setSelectedClusterId: (id) => set({ selectedClusterId: id }),
   setLocationPickMode: (on) => set({ locationPickMode: on }),
+  setSubmissionQueueMinimised: (minimised) => set({ submissionQueueMinimised: minimised }),
 }));

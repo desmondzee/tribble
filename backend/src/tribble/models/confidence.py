@@ -33,6 +33,7 @@ SOURCE_PRIORS: dict[str, float] = {
     "web_anonymous": 0.55,
     "whatsapp_identified": 0.65,
     "whatsapp_anonymous": 0.40,
+    "discord_anonymous": 0.35,
     "acled_historical": 0.95,
     "satellite": 0.85,
     "weather": 0.95,

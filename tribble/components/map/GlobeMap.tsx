@@ -6,9 +6,9 @@ import { AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/store/uiSlice";
 import { useLayerStore } from "@/store/layerSlice";
 import { IncidentTooltip } from "@/components/map/IncidentTooltip";
-import { PLACEHOLDER_EVENTS, PLACEHOLDER_DRONES } from "@/lib/placeholder-data";
+import { PLACEHOLDER_EVENTS } from "@/lib/placeholder-data";
 import { ONTOLOGY_TO_LAYER } from "@/lib/icon-registry";
-import type { HipEvent, Drone } from "@/types";
+import type { HipEvent } from "@/types";
 import type { Incident } from "@/types";
 
 function isLand(phi: number, theta: number): boolean {
@@ -95,7 +95,7 @@ function hipEventToIncident(e: HipEvent): Incident {
   };
 }
 
-function latLngToVector3(lat: number, lng: number, radius: number): THREE.Vector3 {
+function latLngToVector3(lat: number, lng: number, radius: number) {
   const phi = ((90 - lat) * Math.PI) / 180;
   const theta = ((lng + 180) * Math.PI) / 180;
   return new THREE.Vector3(
@@ -119,10 +119,6 @@ export function GlobeMap() {
     const layerId = ONTOLOGY_TO_LAYER[ontologyClass] as keyof typeof visibility | undefined;
     return layerId ? visibility[layerId] ?? true : true;
   };
-  const dronesVisible = visibility.E1_drones ?? true;
-
-  const visibleEvents = PLACEHOLDER_EVENTS.filter((e) => isEventLayerVisible(e.ontology_class));
-  const visibleDrones = dronesVisible ? PLACEHOLDER_DRONES : [];
 
   useEffect(() => {
     const container = containerRef.current;
@@ -255,13 +251,12 @@ export function GlobeMap() {
     group.add(stars);
     scene.add(group);
 
-    const hitTargets: THREE.Mesh[] = [];
-    const hitTargetData: Array<{ type: "event"; incident: Incident } | { type: "drone"; drone: Drone }> = [];
+    const hitTargets: InstanceType<typeof THREE.Mesh>[] = [];
+    const hitTargetData: Array<{ type: "event"; incident: Incident }> = [];
 
     const visibleEvents = PLACEHOLDER_EVENTS.filter((e) =>
       isEventLayerVisible(e.ontology_class)
     );
-    const visibleDrones = dronesVisible ? PLACEHOLDER_DRONES : [];
 
     const eventGeo = new THREE.SphereGeometry(0.06, 12, 12);
     const eventMat = new THREE.MeshBasicMaterial({ color: 0xff6b35 });
@@ -271,17 +266,6 @@ export function GlobeMap() {
       mesh.userData = { type: "event", event: e };
       hitTargets.push(mesh);
       hitTargetData.push({ type: "event", incident: hipEventToIncident(e) });
-      group.add(mesh);
-    }
-
-    const droneGeo = new THREE.SphereGeometry(0.05, 10, 10);
-    const droneMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
-    for (const d of visibleDrones) {
-      const mesh = new THREE.Mesh(droneGeo, droneMat.clone());
-      mesh.position.copy(latLngToVector3(d.position.lat, d.position.lng, radius + 0.12));
-      mesh.userData = { type: "drone", drone: d };
-      hitTargets.push(mesh);
-      hitTargetData.push({ type: "drone", drone: d });
       group.add(mesh);
     }
 
@@ -295,7 +279,7 @@ export function GlobeMap() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(hitTargets);
       if (intersects.length > 0) {
-        const idx = hitTargets.indexOf(intersects[0].object as THREE.Mesh);
+        const idx = hitTargets.indexOf(intersects[0].object as InstanceType<typeof THREE.Mesh>);
         const data = hitTargetData[idx];
         if (data?.type === "event") {
           setHoveredIncident({
@@ -319,7 +303,7 @@ export function GlobeMap() {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(hitTargets);
       if (intersects.length > 0) {
-        const idx = hitTargets.indexOf(intersects[0].object as THREE.Mesh);
+        const idx = hitTargets.indexOf(intersects[0].object as InstanceType<typeof THREE.Mesh>);
         const data = hitTargetData[idx];
         if (data?.type === "event") {
           setSelectedEventId(data.incident.id);

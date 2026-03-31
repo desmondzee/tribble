@@ -1,8 +1,10 @@
 import logging
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
+from tribble.config import get_settings
 from tribble.db import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -95,3 +97,88 @@ async def get_clusters(
             }
         )
     return {"type": "FeatureCollection", "features": features}
+
+
+@router.post("/refresh")
+async def refresh_clusters(
+    radius_km: float | None = Query(None, ge=0.1, le=500),
+    time_window_hours: int | None = Query(None, ge=1, le=8760),
+):
+    """Recompute incident clusters from report locations (PostGIS ST_ClusterDBSCAN)."""
+    try:
+        db = get_supabase()
+    except RuntimeError:
+        raise HTTPException(503, "Database unavailable")
+
+    settings = get_settings()
+    p_radius_km = radius_km if radius_km is not None else settings.cluster_radius_km
+    p_time_window_hours = time_window_hours if time_window_hours is not None else settings.cluster_time_window_hours
+
+    try:
+        result = (
+            db.rpc(
+                "refresh_incident_clusters",
+                {"p_radius_km": p_radius_km, "p_time_window_hours": p_time_window_hours},
+            )
+            .execute()
+            .data
+        )
+    except Exception as exc:
+        logger.error("Cluster refresh failed: %s", exc)
+        raise HTTPException(503, "Database query failed")
+
+    if not result or not isinstance(result, list):
+        count = 0
+    else:
+        row = result[0] if result else {}
+        count = int(row.get("clusters_updated", 0))
+
+    return {"clusters_updated": count}
+
+
+@router.get("/{cluster_id}/relief")
+async def get_cluster_relief_runs(cluster_id: UUID):
+    """Relief runs linked to this cluster (for cluster inspect panel)."""
+    try:
+        db = get_supabase()
+    except RuntimeError:
+        raise HTTPException(503, "Database unavailable")
+    try:
+        rows = (
+            db.table("ngo_relief_runs")
+            .select("*")
+            .eq("cluster_id", str(cluster_id))
+            .in_("status", ["planned", "en_route"])
+            .order("created_at", desc=True)
+            .limit(50)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        logger.exception("Cluster relief query failed: %s", exc)
+        raise HTTPException(503, "Database query failed")
+    items = []
+    for r in rows:
+        o_lng, o_lat = r.get("origin_lng"), r.get("origin_lat")
+        d_lng, d_lat = r.get("destination_lng"), r.get("destination_lat")
+        if None in (o_lng, o_lat, d_lng, d_lat):
+            continue
+        items.append(
+            {
+                "id": str(r["id"]),
+                "origin_lat": float(o_lat),
+                "origin_lng": float(o_lng),
+                "origin_name": r.get("origin_name"),
+                "destination_lat": float(d_lat),
+                "destination_lng": float(d_lng),
+                "destination_name": r.get("destination_name"),
+                "what_doing": r.get("what_doing") or "",
+                "what_providing": r.get("what_providing") or [],
+                "organisation_name": r.get("organisation_name") or "Unknown",
+                "cluster_id": str(r["cluster_id"]) if r.get("cluster_id") else None,
+                "status": r.get("status") or "en_route",
+                "created_at": str(r.get("created_at", "")),
+            }
+        )
+    return {"items": items}

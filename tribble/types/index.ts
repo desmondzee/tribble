@@ -97,24 +97,6 @@ export interface NGO {
 
 export type HeliosStream = "A" | "B" | "C";
 
-export type DroneStatus = "active" | "standby" | "low_battery" | "lost_signal";
-
-export interface DronePosition {
-  lat: number;
-  lng: number;
-  altitude_m: number;
-  speed_kmh: number;
-  heading_deg: number;
-}
-
-export interface Drone {
-  id: string;
-  status: DroneStatus;
-  battery_pct: number;
-  position: DronePosition;
-  signal?: "strong" | "weak" | "lost";
-}
-
 export type { LayerId, LayerGroupId } from "./map";
 
 export type IncidentType =

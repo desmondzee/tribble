@@ -8,12 +8,12 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { getClusters, getNewsEvents, type GeoJSONFeatureCollection, type NewsEvent } from "@/lib/api";
+import { getClusters, getNewsEvents, getReliefRuns, type GeoJSONFeatureCollection, type NewsEvent } from "@/lib/api";
 import { fetchGeolocationGeoJSON } from "@/lib/geolocation-api";
 import { MOCK_CLUSTERS } from "@/data/mapData";
+import { getPlaceholderFeedNews } from "@/lib/feed-placeholder";
 import {
   PLACEHOLDER_EVENTS,
-  PLACEHOLDER_DRONES,
   PLACEHOLDER_ZONES,
   PLACEHOLDER_BOUNDARIES,
   PLACEHOLDER_NGOS,
@@ -94,12 +94,20 @@ function buildRoutesGeoJSON(): GeoJSONFC {
   return { type: "FeatureCollection", features };
 }
 
+const NEWEST_EVENTS_COUNT = 10;
+
+function parseTimestamp(ts: string | null): number {
+  if (ts == null) return 0;
+  const t = Date.parse(ts);
+  return Number.isNaN(t) ? 0 : t;
+}
+
 const DataContext = createContext<{
   clusters: GeoJSONFeatureCollection;
   geolocationEvents: GeoJSONFC;
   newsEvents: NewsEvent[];
+  newestEventIds: Set<string>;
   events: typeof PLACEHOLDER_EVENTS;
-  drones: typeof PLACEHOLDER_DRONES;
   zones: GeoJSONFC;
   boundaries: GeoJSONFC;
   ngoZones: GeoJSONFC;
@@ -128,9 +136,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     type: "FeatureCollection",
     features: [],
   });
-  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>([]);
+  const [newsEvents, setNewsEvents] = useState<NewsEvent[]>(() => getPlaceholderFeedNews());
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [reliefRunsGeoJSON, setReliefRunsGeoJSON] = useState<GeoJSONFC | null>(null);
 
   const tryFetchClusters = useCallback(async () => {
     try {
@@ -146,9 +155,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const tryFetchNews = useCallback(async () => {
     try {
       const items = await getNewsEvents({ limit: 50, country_iso: "SSD" });
-      setNewsEvents(items);
+      setNewsEvents(items.length > 0 ? items : getPlaceholderFeedNews());
     } catch {
-      // Keep existing news
+      setNewsEvents(getPlaceholderFeedNews());
     }
   }, []);
 
@@ -161,6 +170,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       });
     } catch {
       // Keep empty; placeholder events from PLACEHOLDER_EVENTS used for display
+    }
+  }, []);
+
+  const tryFetchReliefRuns = useCallback(async () => {
+    try {
+      const data = await getReliefRuns({ country_iso: "SSD", limit: 200 });
+      setReliefRunsGeoJSON({
+        type: "FeatureCollection",
+        features: data.features as GeoJSONFC["features"],
+      });
+    } catch {
+      setReliefRunsGeoJSON(null);
     }
   }, []);
 
@@ -182,21 +203,43 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(t2);
   }, [tryFetchGeolocation]);
 
+  useEffect(() => {
+    tryFetchReliefRuns();
+    const tRelief = setInterval(tryFetchReliefRuns, 60_000);
+    return () => clearInterval(tRelief);
+  }, [tryFetchReliefRuns]);
+
+  const newestEventIds = useMemo(() => {
+    const sorted = [...newsEvents].sort(
+      (a, b) => parseTimestamp(b.timestamp) - parseTimestamp(a.timestamp)
+    );
+    return new Set(sorted.slice(0, NEWEST_EVENTS_COUNT).map((e) => e.id));
+  }, [newsEvents]);
+
+  const routes = useMemo((): GeoJSONFC => {
+    const staticFeatures = ROUTES.features;
+    const reliefFeatures = reliefRunsGeoJSON?.features ?? [];
+    return {
+      type: "FeatureCollection",
+      features: [...staticFeatures, ...reliefFeatures],
+    };
+  }, [reliefRunsGeoJSON]);
+
   const value = useMemo(
     () => ({
       clusters,
       geolocationEvents,
       newsEvents,
+      newestEventIds,
       events: PLACEHOLDER_EVENTS,
-      drones: PLACEHOLDER_DRONES,
       zones: ZONES,
       boundaries: BOUNDARIES,
       ngoZones: NGO_ZONES,
-      routes: ROUTES,
+      routes,
       lastUpdated,
       isLive,
     }),
-    [clusters, geolocationEvents, newsEvents, lastUpdated, isLive]
+    [clusters, geolocationEvents, newsEvents, newestEventIds, routes, lastUpdated, isLive]
   );
 
   return (

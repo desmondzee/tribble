@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown, ChevronUp, MessageSquare, Bot } from "lucide-react";
 import type { Map as MapboxMap, FillLayer, LineLayer } from "mapbox-gl";
 import Map, {
   Marker,
+  Popup,
   Source,
   Layer,
   NavigationControl,
@@ -12,7 +15,6 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import "@/styles/map.css";
 import ClusterMarker from "./ClusterMarker";
 import { EventMarker } from "./EventMarker";
-import { DroneMarker } from "./DroneMarker";
 import {
   buildCoverageGeoJSON,
   buildSeverityZoneGeoJSON,
@@ -20,6 +22,14 @@ import {
 } from "@/data/mapData";
 import { useData } from "@/context/DataContext";
 import { useUIStore } from "@/store/uiSlice";
+import {
+  getEventSatelliteResults,
+  runEventSatelliteAnalysis,
+  getSatellitePreviewUrl,
+  type EventSatelliteResult,
+  type NewsEvent,
+} from "@/lib/api";
+import type { HipEvent } from "@/types";
 
 const TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -72,10 +82,16 @@ const LAYER_META = [
   { key: "zones", label: "ZONES" },
   { key: "boundaries", label: "BOUNDARIES" },
   { key: "events", label: "EVENTS" },
-  { key: "drones", label: "DRONES" },
   { key: "ngoZones", label: "NGO ZONES" },
-  { key: "routes", label: "ROUTES" },
+  { key: "routes", label: "ROUTES & RELIEF EN ROUTE" },
   { key: "geolocation", label: "GEOLOCATION" },
+] as const;
+
+const LEGEND_SEVERITY_ITEMS = [
+  { label: "Critical", color: "hsl(var(--hip-critical))" },
+  { label: "High", color: "hsl(var(--hip-warn))" },
+  { label: "Medium", color: "hsl(var(--hip-medium))" },
+  { label: "Low", color: "hsl(var(--hip-low))" },
 ] as const;
 
 type LayerKey = (typeof LAYER_META)[number]["key"];
@@ -121,16 +137,109 @@ const BOUNDARIES_LINE_PAINT = {
 
 const DEFAULT_VIEW = { longitude: 30.5, latitude: 7.0, zoom: 5.5 };
 
+function timeSince(ts: string | null): string {
+  if (!ts) return "—";
+  const mins = Math.round((Date.now() - new Date(ts).getTime()) / 60000);
+  if (mins < 0) return "now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h ago`;
+  return `${Math.floor(mins / 1440)}d ago`;
+}
+
 export default function LiveMap() {
-  const { clusters, zones, boundaries, events, drones, ngoZones, routes, geolocationEvents } = useData();
+  const { clusters, zones, boundaries, events, ngoZones, routes, geolocationEvents, newsEvents, newestEventIds } = useData();
   const {
     setSelectedEventId,
+    setSelectedNewsEventId,
     setRightPanelOpen,
     setRightPanelTab,
     setSelectedClusterId,
     locationPickMode,
     setLocationPickMode,
+    rightPanelOpen,
+    selectedEventId,
+    selectedNewsEventId,
   } = useUIStore();
+
+  const [popupSatelliteResult, setPopupSatelliteResult] = useState<EventSatelliteResult | null>(null);
+  const [popupSatelliteLoading, setPopupSatelliteLoading] = useState(false);
+  const [popupAnalysisLoading, setPopupAnalysisLoading] = useState(false);
+  const [popupSatelliteError, setPopupSatelliteError] = useState<string | null>(null);
+  const [popupHeliosOverviewOpen, setPopupHeliosOverviewOpen] = useState(false);
+
+  const popupEvent = useMemo((): (NewsEvent | HipEvent) | null => {
+    if (selectedNewsEventId) {
+      const ev = newsEvents.find((e) => e.id === selectedNewsEventId);
+      if (ev && ev.lat != null && ev.lng != null) return ev;
+    }
+    if (selectedEventId) {
+      return events.find((e) => e.id === selectedEventId) ?? null;
+    }
+    return null;
+  }, [selectedNewsEventId, selectedEventId, newsEvents, events]);
+
+  const popupLat = popupEvent == null ? null : "headline" in popupEvent ? (popupEvent as NewsEvent).lat ?? null : (popupEvent as HipEvent).lat;
+  const popupLng = popupEvent == null ? null : "headline" in popupEvent ? (popupEvent as NewsEvent).lng ?? null : (popupEvent as HipEvent).lng;
+  const popupHasCoords = popupLat != null && popupLng != null;
+  const popupEventId = popupEvent?.id ?? null;
+
+  useEffect(() => {
+    if (!popupEventId || !popupHasCoords) {
+      setPopupSatelliteResult(null);
+      setPopupSatelliteError(null);
+      setPopupHeliosOverviewOpen(false);
+      return;
+    }
+    let cancelled = false;
+    setPopupSatelliteError(null);
+    setPopupSatelliteLoading(true);
+    getEventSatelliteResults([popupEventId])
+      .then((data) => {
+        if (cancelled) return;
+        const first = data.results.find((r) => r.event_id === popupEventId);
+        setPopupSatelliteResult(first ?? null);
+      })
+      .catch((err) => {
+        if (!cancelled) setPopupSatelliteError(err instanceof Error ? err.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setPopupSatelliteLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [popupEventId, popupHasCoords]);
+
+  const runPopupAnalysis = useCallback(async () => {
+    if (!popupEvent || !popupHasCoords) return;
+    setPopupSatelliteError(null);
+    setPopupAnalysisLoading(true);
+    try {
+      const payload =
+        "headline" in popupEvent
+          ? {
+              id: popupEvent.id,
+              headline: popupEvent.headline,
+              lat: (popupEvent as NewsEvent).lat,
+              lng: (popupEvent as NewsEvent).lng,
+              timestamp: (popupEvent as NewsEvent).timestamp ?? undefined,
+            }
+          : {
+              id: popupEvent.id,
+              headline: (popupEvent as HipEvent).description || (popupEvent as HipEvent).location_name,
+              lat: (popupEvent as HipEvent).lat,
+              lng: (popupEvent as HipEvent).lng,
+              timestamp: (popupEvent as HipEvent).timestamp,
+            };
+      const data = await runEventSatelliteAnalysis([payload]);
+      const first = data.results.find((r) => r.event_id === popupEvent.id) ?? data.results[0];
+      if (first) setPopupSatelliteResult(first);
+    } catch (err) {
+      setPopupSatelliteError(err instanceof Error ? err.message : "Analysis failed");
+    } finally {
+      setPopupAnalysisLoading(false);
+    }
+  }, [popupEvent, popupHasCoords]);
 
   const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
     clusters: true,
@@ -139,9 +248,8 @@ export default function LiveMap() {
     zones: true,
     boundaries: true,
     events: true,
-    drones: true,
     ngoZones: true,
-    routes: true,
+    routes: false,
     geolocation: true,
   });
   const [viewState, setViewState] = useState({
@@ -151,6 +259,7 @@ export default function LiveMap() {
   });
   const [mapMode, setMapMode] = useState<"satellite" | "3d">("satellite");
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   const mapRef = useRef<MapboxMap | null>(null);
 
   const flatClusters = useMemo(
@@ -165,6 +274,26 @@ export default function LiveMap() {
     () => buildSeverityZoneGeoJSON(flatClusters),
     [flatClusters]
   );
+  const eventsCircleGeoJSON = useMemo((): GeoJSON.FeatureCollection => {
+    const points: GeoJSON.Feature<GeoJSON.Point, { id: string; severity: string }>[] = [];
+    events.forEach((evt) => {
+      points.push({
+        type: "Feature",
+        properties: { id: evt.id, severity: evt.severity },
+        geometry: { type: "Point", coordinates: [evt.lng, evt.lat] },
+      });
+    });
+    newsEvents.forEach((evt) => {
+      if (evt.lat != null && evt.lng != null) {
+        points.push({
+          type: "Feature",
+          properties: { id: evt.id, severity: evt.severity },
+          geometry: { type: "Point", coordinates: [evt.lng, evt.lat] },
+        });
+      }
+    });
+    return { type: "FeatureCollection", features: points };
+  }, [events, newsEvents]);
 
   const toggleLayer = useCallback(
     (key: LayerKey) => setLayers((prev) => ({ ...prev, [key]: !prev[key] })),
@@ -190,6 +319,77 @@ export default function LiveMap() {
     mapRef.current = evt.target;
     setMapLoaded(true);
   }, []);
+
+  const handleMapClick = useCallback(
+    (e: { lngLat: { lng: number; lat: number }; point: { x: number; y: number } }) => {
+      if (locationPickMode) {
+        window.dispatchEvent(
+          new CustomEvent("hip:locationPicked", {
+            detail: { lat: e.lngLat.lat, lng: e.lngLat.lng },
+          })
+        );
+        setLocationPickMode(false);
+        return;
+      }
+      const map = mapRef.current;
+      if (!map || !layers.events) return;
+      const features = map.queryRenderedFeatures([e.point.x, e.point.y], {
+        layers: ["event-circles-layer"],
+      });
+      if (features.length === 0) return;
+      const first = features[0];
+      const id = first.properties?.id as string | undefined;
+      if (!id) return;
+      const placeholderEvent = events.find((ev) => ev.id === id);
+      const newsEvent = newsEvents.find((ev) => ev.id === id);
+      if (placeholderEvent) {
+        setSelectedEventId(id);
+        setSelectedNewsEventId(null);
+        setRightPanelOpen(true);
+        setRightPanelTab("news_feed");
+        map.flyTo({
+          center: [placeholderEvent.lng, placeholderEvent.lat],
+          zoom: 9,
+          duration: 800,
+          essential: true,
+        });
+        setViewState((prev) => ({
+          ...prev,
+          longitude: placeholderEvent.lng,
+          latitude: placeholderEvent.lat,
+          zoom: 9,
+        }));
+      } else if (newsEvent && newsEvent.lat != null && newsEvent.lng != null) {
+        setSelectedNewsEventId(id);
+        setSelectedEventId(null);
+        setRightPanelOpen(true);
+        setRightPanelTab("news_feed");
+        map.flyTo({
+          center: [newsEvent.lng, newsEvent.lat],
+          zoom: 9,
+          duration: 800,
+          essential: true,
+        });
+        setViewState((prev) => ({
+          ...prev,
+          longitude: newsEvent.lng!,
+          latitude: newsEvent.lat!,
+          zoom: 9,
+        }));
+      }
+    },
+    [
+      locationPickMode,
+      setLocationPickMode,
+      layers.events,
+      events,
+      newsEvents,
+      setSelectedEventId,
+      setSelectedNewsEventId,
+      setRightPanelOpen,
+      setRightPanelTab,
+    ]
+  );
 
   useEffect(() => {
     const map = mapRef.current;
@@ -295,14 +495,7 @@ export default function LiveMap() {
         onMove={(e) => setViewState(e.viewState)}
         onLoad={handleMapLoad}
         onClick={(e) => {
-          if (locationPickMode) {
-            window.dispatchEvent(
-              new CustomEvent("hip:locationPicked", {
-                detail: { lat: e.lngLat.lat, lng: e.lngLat.lng },
-              })
-            );
-            setLocationPickMode(false);
-          }
+          handleMapClick(e);
         }}
         mapboxAccessToken={TOKEN}
         mapStyle={MAP_STYLES[mapMode]}
@@ -354,10 +547,22 @@ export default function LiveMap() {
               id="routes-line"
               type="line"
               paint={{
-                "line-color": "#38bdf8",
+                "line-color": [
+                  "match",
+                  ["get", "type"],
+                  "relief_run",
+                  "#22c55e",
+                  "#38bdf8",
+                ],
                 "line-width": 2,
                 "line-opacity": 0.7,
-                "line-dasharray": [2, 2],
+                "line-dasharray": [
+                  "match",
+                  ["get", "type"],
+                  "relief_run",
+                  [4, 2],
+                  [2, 2],
+                ],
               }}
             />
           </Source>
@@ -391,31 +596,72 @@ export default function LiveMap() {
           </Source>
         )}
 
+        {mapLoaded && layers.events && eventsCircleGeoJSON.features.length > 0 && (
+          <Source id="event-circles" type="geojson" data={eventsCircleGeoJSON}>
+            <Layer
+              id="event-circles-layer"
+              type="circle"
+              paint={{
+                "circle-radius": 10,
+                "circle-color": [
+                  "match",
+                  ["get", "severity"],
+                  "critical", "#ef4444",
+                  "high", "#f97316",
+                  "medium", "#eab308",
+                  "#38bdf8",
+                ],
+                "circle-opacity": 0.75,
+                "circle-stroke-width": 2,
+                "circle-stroke-color": "#fff",
+              }}
+            />
+          </Source>
+        )}
+
         {layers.events &&
           events.map((evt) => (
             <Marker key={evt.id} longitude={evt.lng} latitude={evt.lat} anchor="center">
               <EventMarker
                 event={evt}
+                isNewest={newestEventIds.has(evt.id)}
                 onClick={() => {
                   setSelectedEventId(evt.id);
+                  setSelectedNewsEventId(null);
                   setRightPanelOpen(true);
                   setRightPanelTab("news_feed");
                 }}
               />
             </Marker>
           ))}
-        {layers.drones &&
-          drones.map((d) => (
-            <Marker
-              key={d.id}
-              longitude={d.position.lng}
-              latitude={d.position.lat}
-              anchor="center"
-            >
-              <DroneMarker drone={d} />
-            </Marker>
-          ))}
-
+        {layers.events &&
+          newsEvents
+            .filter((evt) => evt.lat != null && evt.lng != null)
+            .map((evt) => (
+              <Marker
+                key={evt.id}
+                longitude={evt.lng!}
+                latitude={evt.lat!}
+                anchor="center"
+              >
+                <EventMarker
+                  event={{
+                    id: evt.id,
+                    severity: evt.severity,
+                    lat: evt.lat!,
+                    lng: evt.lng!,
+                    location_name: evt.headline,
+                  }}
+                  isNewest={newestEventIds.has(evt.id)}
+                  onClick={() => {
+                    setSelectedNewsEventId(evt.id);
+                    setSelectedEventId(null);
+                    setRightPanelOpen(true);
+                    setRightPanelTab("news_feed");
+                  }}
+                />
+              </Marker>
+            ))}
         {layers.clusters &&
           clusters.features.map((f) => {
             const [lng, lat] = f.geometry.coordinates;
@@ -439,28 +685,141 @@ export default function LiveMap() {
               </Marker>
             );
           })}
+        {popupEvent && popupLat != null && popupLng != null && (
+          <Popup
+            longitude={popupLng}
+            latitude={popupLat}
+            anchor="bottom"
+            closeButton
+            closeOnClick={false}
+            onClose={() => {
+              setSelectedNewsEventId(null);
+              setSelectedEventId(null);
+            }}
+            className="event-popup-speech-bubble"
+            maxWidth="320px"
+          >
+            <div className="rounded-lg bg-popover border border-border shadow-lg p-3 min-w-[200px] max-w-[300px]">
+              <p className="font-mono text-[9px] tracking-wider text-primary mb-1.5">EVENT</p>
+              <p className="text-[11px] font-medium text-foreground leading-tight line-clamp-2">
+                {"headline" in popupEvent ? popupEvent.headline : (popupEvent as HipEvent).location_name}
+              </p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-0.5">
+                {"source" in popupEvent ? popupEvent.source : (popupEvent as HipEvent).source_label}
+              </p>
+              <p className="font-mono text-[8px] text-muted-foreground mt-0.5">
+                {timeSince("timestamp" in popupEvent ? (popupEvent as NewsEvent).timestamp : (popupEvent as HipEvent).timestamp)} · {popupLat.toFixed(2)}, {popupLng.toFixed(2)}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  className="font-mono text-[9px] px-2 py-1 rounded border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                  onClick={() => {
+                    setRightPanelOpen(true);
+                    setRightPanelTab("news_feed");
+                  }}
+                >
+                  Open in feed
+                </button>
+                {popupHasCoords && (
+                  <button
+                    type="button"
+                    onClick={runPopupAnalysis}
+                    disabled={popupAnalysisLoading || popupSatelliteLoading}
+                    className="font-mono text-[9px] px-2 py-1 rounded border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {popupAnalysisLoading || popupSatelliteLoading ? (
+                      <span className="animate-pulse">Loading...</span>
+                    ) : (
+                      <>Get satellite & analyse</>
+                    )}
+                  </button>
+                )}
+              </div>
+              {popupSatelliteError && (
+                <p className="font-mono text-[8px] text-destructive mt-2">{popupSatelliteError}</p>
+              )}
+              {popupSatelliteResult && (
+                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                  {popupSatelliteResult.snapshots.length > 0 && (
+                    <div>
+                      <p className="font-mono text-[7px] tracking-wider text-muted-foreground mb-1">SATELLITE</p>
+                      <div className="flex gap-1 overflow-x-auto">
+                        {popupSatelliteResult.snapshots.map((snap) => (
+                          <div key={snap.period_label} className="flex-shrink-0 w-14">
+                            <img
+                              src={snap.scene_id ? getSatellitePreviewUrl(snap.scene_id) : snap.image_url}
+                              alt={snap.period_label}
+                              className="w-14 h-14 object-cover rounded border border-border"
+                            />
+                            <p className="font-mono text-[6px] text-muted-foreground truncate">{snap.period_label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {popupSatelliteResult.aid_impact && (
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => setPopupHeliosOverviewOpen((o) => !o)}
+                        className="flex items-center gap-1.5 w-full text-left font-mono text-[7px] tracking-wider text-primary hover:text-primary/80"
+                        aria-expanded={popupHeliosOverviewOpen}
+                      >
+                        <Bot className="w-2.5 h-2.5 flex-shrink-0" />
+                        HELIOS AI overview
+                        {popupHeliosOverviewOpen ? (
+                          <ChevronUp className="w-2.5 h-2.5 ml-auto flex-shrink-0" />
+                        ) : (
+                          <ChevronDown className="w-2.5 h-2.5 ml-auto flex-shrink-0" />
+                        )}
+                      </button>
+                      {popupHeliosOverviewOpen && (
+                        <div className="pl-4 space-y-1 border-l-2 border-primary/20">
+                          {popupSatelliteResult.aid_impact.summary && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Brief description</p>
+                              <p className="text-[9px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.summary}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.problems && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">What to watch out for</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.problems}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.infrastructure_note && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Infrastructure</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.infrastructure_note}
+                              </p>
+                            </div>
+                          )}
+                          {popupSatelliteResult.aid_impact.realistic_solutions && (
+                            <div>
+                              <p className="font-mono text-[6px] text-muted-foreground">Realistic solutions</p>
+                              <p className="text-[8px] text-foreground/90 leading-snug line-clamp-2">
+                                {popupSatelliteResult.aid_impact.realistic_solutions}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </Popup>
+        )}
       </Map>
 
       <div className="map-hud-overlay">
-        <div className="map-hud-coords map-hud-panel">
-          <div className="map-hud-row">
-            <span className="map-hud-label">LAT</span>
-            <span className="map-hud-value">
-              {viewState.latitude.toFixed(4)}°
-            </span>
-          </div>
-          <div className="map-hud-row">
-            <span className="map-hud-label">LON</span>
-            <span className="map-hud-value">
-              {viewState.longitude.toFixed(4)}°
-            </span>
-          </div>
-          <div className="map-hud-row">
-            <span className="map-hud-label">ZOOM</span>
-            <span className="map-hud-value">{viewState.zoom.toFixed(1)}</span>
-          </div>
-        </div>
-
         <div className="map-mode-controls map-hud-panel">
           <div className="map-layer-header">MODE</div>
           <button
@@ -483,24 +842,104 @@ export default function LiveMap() {
               RESET VIEW
             </button>
           )}
+          {!rightPanelOpen && (
+            <button
+              type="button"
+              className="map-layer-btn flex items-center gap-2 w-full"
+              onClick={() => {
+                setRightPanelOpen(true);
+                setRightPanelTab("agent");
+              }}
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-primary" />
+              <span>HELIOS</span>
+            </button>
+          )}
         </div>
 
-        <div className="map-layer-controls map-hud-panel">
-          <div className="map-layer-header">LAYERS</div>
-          {LAYER_META.map(({ key, label }) => (
+        {/* Right: single LEGEND panel with Severity + Layers inside */}
+        <div className="map-right-stack">
+          <div className="map-legend-controls map-hud-panel">
             <button
-              key={key}
-              className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
-              onClick={() => toggleLayer(key)}
+              type="button"
+              className="map-layer-controls-bar flex items-center justify-between gap-2 w-full py-2 px-2 rounded-sm hover:bg-white/5 transition-colors"
+              onClick={() => setLegendOpen((o) => !o)}
+              aria-expanded={legendOpen}
+              aria-label={legendOpen ? "Minimize legend" : "Expand legend"}
             >
-              <span className={`map-layer-dot ${key}`} />
-              {label}
+              <span className="map-layer-header mb-0">LEGEND</span>
+              {legendOpen ? (
+                <ChevronUp className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-[var(--text-dim)] flex-shrink-0" />
+              )}
             </button>
-          ))}
+            <AnimatePresence initial={false}>
+              {legendOpen && (
+                <motion.div
+                  className="flex flex-col gap-2 pt-2 pb-0"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div>
+                    <p className="map-layer-header mb-1">SEVERITY</p>
+                    <div className="space-y-1.5">
+                      {LEGEND_SEVERITY_ITEMS.map((item) => (
+                        <div
+                          key={item.label}
+                          className="flex items-center gap-2 map-legend-row"
+                        >
+                          <div
+                            className="w-2 h-2 rounded-sm flex-shrink-0"
+                            style={{ backgroundColor: item.color }}
+                          />
+                          <span className="map-legend-item">{item.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="map-layer-header mb-1">LAYERS</p>
+                    <div className="flex flex-col gap-0.5">
+                      {LAYER_META.map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          className={`map-layer-btn ${layers[key as keyof typeof layers] ? "active" : ""}`}
+                          onClick={() => toggleLayer(key)}
+                        >
+                          <span className={`map-layer-dot ${key}`} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         <div className="map-hud-meta">
-          <div>PROJ: MERCATOR</div>
+          <div className="map-hud-row">
+            <span className="map-hud-label">LAT</span>
+            <span className="map-hud-value">
+              {viewState.latitude.toFixed(4)}°
+            </span>
+          </div>
+          <div className="map-hud-row">
+            <span className="map-hud-label">LON</span>
+            <span className="map-hud-value">
+              {viewState.longitude.toFixed(4)}°
+            </span>
+          </div>
+          <div className="map-hud-row">
+            <span className="map-hud-label">ZOOM</span>
+            <span className="map-hud-value">{viewState.zoom.toFixed(1)}</span>
+          </div>
+          <div className="map-hud-meta-divider">PROJ: MERCATOR</div>
           <div>DATUM: WGS84</div>
           <div className="highlight">
             {clusters.features.length} CLUSTERS

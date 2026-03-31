@@ -1,8 +1,9 @@
 import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 from fastapi.testclient import TestClient
 from tribble.main import app
+from tribble.models.satellite_ai import SatelliteAIAnalysis
 from tribble.services.llm_provider import LLMResult
 
 client = TestClient(app)
@@ -75,18 +76,19 @@ def _mock_supabase():
     return sb
 
 
+@patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock, return_value=SatelliteAIAnalysis.no_signal())
 @patch("tribble.api.analysis.get_supabase")
-@patch("tribble.api.analysis.GeminiProvider")
-def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
+@patch("tribble.api.analysis.AnthropicProvider")
+def test_dashboard_returns_zones(mock_llm_cls, mock_get_sb, mock_ai_analysis):
     mock_get_sb.return_value = _mock_supabase()
 
-    mock_gemini = MagicMock()
+    mock_llm = MagicMock()
 
     async def fake_generate(prompt):
-        return LLMResult(status="ok", text="Risk assessment narrative", model="gemini-2.5-flash", metadata={"provider": "gemini"})
+        return LLMResult(status="ok", text="Risk assessment narrative", model="claude-3-5-haiku-20241022", metadata={"provider": "anthropic"})
 
-    mock_gemini.generate = fake_generate
-    mock_gemini_cls.return_value = mock_gemini
+    mock_llm.generate = fake_generate
+    mock_llm_cls.return_value = mock_llm
 
     response = client.get("/api/analysis/dashboard")
     assert response.status_code == 200
@@ -99,3 +101,93 @@ def test_dashboard_returns_zones(mock_gemini_cls, mock_get_sb):
     assert "risk_profile" in zone
     assert "satellite_context" in zone
     assert "viewer_url" in zone["satellite_context"]
+    assert "ai_analysis" in zone["satellite_context"]
+
+
+@patch("tribble.api.analysis.get_or_create_ai_analysis_async", new_callable=AsyncMock)
+@patch("tribble.api.analysis.get_supabase")
+@patch("tribble.api.analysis.AnthropicProvider")
+def test_dashboard_satellite_confirmed_includes_infrastructure_damage_when_ai_high(mock_llm_cls, mock_get_sb, mock_ai_analysis):
+    mock_get_sb.return_value = _mock_supabase()
+    mock_llm_cls.return_value.generate = AsyncMock(
+        return_value=LLMResult(status="ok", text="Narrative", model="anthropic", metadata={})
+    )
+    high_infra = SatelliteAIAnalysis(
+        flood_score_ai=0.2,
+        infrastructure_damage_score_ai=0.8,
+        labels=["possible_infrastructure_damage"],
+        model="claude-3-5-haiku-20241022",
+    )
+    mock_ai_analysis.return_value = high_infra
+
+    response = client.get("/api/analysis/dashboard")
+    assert response.status_code == 200
+    zone = response.json()["zones"][0]
+    assert "infrastructure_damage" in zone["corroboration"]["satellite_confirmed"]
+    assert zone["satellite_context"]["ai_analysis"]["infrastructure_damage_score_ai"] == 0.8
+
+
+@patch("tribble.api.satellite.get_supabase")
+def test_satellite_scenes_intervals_empty(mock_get_sb):
+    sb = MagicMock()
+    table = MagicMock()
+    table.select.return_value = table
+    table.order.return_value = table
+    table.execute.return_value = MagicMock(data=[])
+    sb.table.return_value = table
+    mock_get_sb.return_value = sb
+
+    response = client.get("/api/satellite/scenes/intervals")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["min_date"] is None
+    assert data["max_date"] is None
+    assert data["intervals"] == []
+
+
+@patch("tribble.api.satellite.get_supabase")
+def test_satellite_scenes_intervals_from_data(mock_get_sb):
+    sb = MagicMock()
+    table = MagicMock()
+    table.select.return_value = table
+    table.order.return_value = table
+    table.execute.return_value = MagicMock(
+        data=[
+            {"acquisition_date": "2024-05-03T10:00:00Z"},
+            {"acquisition_date": "2024-05-08T10:00:00Z"},
+            {"acquisition_date": "2024-05-15T10:00:00Z"},
+        ]
+    )
+    sb.table.return_value = table
+    mock_get_sb.return_value = sb
+
+    response = client.get("/api/satellite/scenes/intervals")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["min_date"] == "2024-05-03"
+    assert data["max_date"] == "2024-05-15"
+    assert len(data["intervals"]) >= 1
+    assert all("label" in i and "date_from" in i and "date_to" in i for i in data["intervals"])
+
+
+@patch("tribble.api.satellite.httpx.AsyncClient")
+def test_satellite_preview_proxy_returns_png(mock_client_cls):
+    """Preview endpoint proxies Planetary Computer and returns image/png."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b"\x89PNG\r\n\x1a\n"
+    mock_response.raise_for_status = MagicMock()
+
+    async def fake_get(url):
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = fake_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client_cls.return_value = mock_client
+
+    response = client.get("/api/satellite/preview?scene_id=S2B_MSIL2A_20220606T080609_R078_T36PUR_20220606T193343")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert b"PNG" in response.content
